@@ -50,10 +50,10 @@ export default function AvailabilityTestPage() {
         if (cancelled) return;
         if (error) {
           next[s.datetimeUtc] = { rows: [], error: error.message };
-          console.error(`[AvailabilityTest] ${s.label}:`, error);
+          if (import.meta.env.DEV) console.error(`[AvailabilityTest] ${s.label}:`, error);
         } else {
           next[s.datetimeUtc] = { rows: (data ?? []) as ResultRow[] };
-          console.log(`[AvailabilityTest] ${s.label}`, { count: (data ?? []).length, available: (data ?? []).filter((r: ResultRow) => r.is_available).length, raw: data });
+          if (import.meta.env.DEV) console.log(`[AvailabilityTest] ${s.label}`, { count: (data ?? []).length, available: (data ?? []).filter((r: ResultRow) => r.is_available).length, raw: data });
         }
       }
       if (!cancelled) {

@@ -37,7 +37,7 @@ const ConversationsPage = () => {
 
       // Get booking info
       const bookingIds = data.filter((c) => c.booking_id).map((c) => c.booking_id!);
-      let bookingMap = new Map();
+      const bookingMap = new Map();
       if (bookingIds.length) {
         const { data: bookings } = await supabase
           .from("bookings")
