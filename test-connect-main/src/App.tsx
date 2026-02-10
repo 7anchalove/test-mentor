@@ -11,6 +11,7 @@ import AuthPage from "./pages/AuthPage";
 import ChooseTestPage from "./pages/student/ChooseTestPage";
 import PickDateTimePage from "./pages/student/PickDateTimePage";
 import TeachersPage from "./pages/student/TeachersPage";
+import PendingRequestsPage from "./pages/student/PendingRequestsPage";
 import ChatPage from "./pages/ChatPage";
 import ConversationsPage from "./pages/ConversationsPage";
 import TeacherDashboard from "./pages/teacher/TeacherDashboard";
@@ -38,6 +39,7 @@ const App = () => (
             <Route path="/choose-test" element={<ProtectedRoute requiredRole="student"><ChooseTestPage /></ProtectedRoute>} />
             <Route path="/pick-datetime" element={<ProtectedRoute requiredRole="student"><PickDateTimePage /></ProtectedRoute>} />
             <Route path="/teachers" element={<ProtectedRoute requiredRole="student"><TeachersPage /></ProtectedRoute>} />
+            <Route path="/pending-requests" element={<ProtectedRoute requiredRole="student"><PendingRequestsPage /></ProtectedRoute>} />
 
             {/* Teacher routes */}
             <Route path="/dashboard" element={<ProtectedRoute requiredRole="teacher"><TeacherDashboard /></ProtectedRoute>} />

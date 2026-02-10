@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,7 @@ interface TeacherWithAvailability {
 
 const TeachersPage = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -118,39 +119,30 @@ const TeachersPage = () => {
 
       if (selErr) throw selErr;
 
-      // Create booking via RPC (atomic capacity check + insert under lock)
-      const { data: bookingRows, error: bookErr } = await supabase.rpc(
-        "create_booking_with_capacity_check",
-        {
-          p_student_id: user.id,
-          p_teacher_id: teacherId,
-          p_student_test_selection_id: selection.id,
-          p_start_date_time: datetimeStr,
-        }
-      );
-
-      if (bookErr) throw bookErr;
-      const booking = Array.isArray(bookingRows) && bookingRows.length > 0 ? bookingRows[0] : null;
-      if (!booking) throw new Error("Booking could not be created");
-
-      // Create conversation
-      const { data: convo, error: convoErr } = await supabase
-        .from("conversations")
+      // Create pending booking request (capacity is enforced by trigger)
+      const { data: booking, error: bookErr } = await supabase
+        .from("bookings")
         .insert({
           student_id: user.id,
           teacher_id: teacherId,
-          booking_id: booking.id,
+          student_test_selection_id: selection.id,
+          start_date_time: datetimeStr,
+          status: "pending",
         })
         .select()
         .single();
 
-      if (convoErr) throw convoErr;
+      if (bookErr) throw bookErr;
+      if (!booking) throw new Error("Booking request could not be created");
 
-      return convo;
+      return booking;
     },
-    onSuccess: (convo) => {
-      toast({ title: "Booking confirmed!", description: "Opening your chat..." });
-      navigate(`/chat/${convo.id}`);
+    onSuccess: () => {
+      toast({
+        title: "Request sent — waiting for teacher approval",
+      });
+      setBookingTeacherId(null);
+      queryClient.invalidateQueries({ queryKey: ["teachers-availability", datetimeStr, category] });
     },
     onError: (err: Error) => {
       const isCapacityFull =
