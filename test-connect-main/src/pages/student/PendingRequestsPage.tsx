@@ -1,12 +1,21 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, CalendarIcon, Clock, BookOpen, User } from "lucide-react";
+import {
+  ArrowLeft,
+  CalendarIcon,
+  Clock,
+  BookOpen,
+  User,
+  Loader2,
+  AlertCircle,
+  MessageSquare,
+} from "lucide-react";
 import { format } from "date-fns";
 import AppLayout from "@/components/layout/AppLayout";
 import { useToast } from "@/hooks/use-toast";
@@ -17,6 +26,37 @@ const PendingRequestsPage = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const handledBookingsRef = useRef<Set<string>>(new Set());
+   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const cancelMutation = useMutation({
+    mutationFn: async (bookingId: string) => {
+      const { error } = await supabase
+        .from("bookings")
+        .update({ status: "cancelled" })
+        .eq("id", bookingId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["student-pending-requests", user?.id],
+      });
+      toast({
+        title: "Demande annulée",
+      });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Impossible d'annuler la demande",
+        description: err?.message ?? "Veuillez réessayer.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleCancel = (bookingId: string) => {
+    cancelMutation.mutate(bookingId);
+  };
 
   const { data: requests, isLoading } = useQuery({
     queryKey: ["student-pending-requests", user?.id],
@@ -27,23 +67,12 @@ const PendingRequestsPage = () => {
         .from("bookings")
         .select("*")
         .eq("student_id", user.id)
-        .eq("status", "pending")
-        .order("start_date_time", { ascending: true });
+        .order("created_at", { ascending: false });
 
       if (error) {
         throw error;
       }
       if (!data?.length) return [];
-
-      const teacherIds = [...new Set(data.map((b) => b.teacher_id))];
-      const { data: teacherProfiles, error: teacherErr } = await supabase
-        .from("profiles")
-        .select("user_id, name")
-        .in("user_id", teacherIds);
-
-      if (teacherErr) {
-        throw teacherErr;
-      }
 
       const selectionIds = data.map((b) => b.student_test_selection_id);
       const { data: selections, error: selErr } = await supabase
@@ -55,19 +84,37 @@ const PendingRequestsPage = () => {
         throw selErr;
       }
 
+      const teacherIds = [...new Set(data.map((b) => b.teacher_id))];
+      const { data: teacherProfiles, error: teacherErr } = await supabase
+        .from("profiles")
+        .select("user_id, name, avatar_url")
+        .in("user_id", teacherIds);
+
+      if (teacherErr) {
+        throw teacherErr;
+      }
+
+      const bookingIds = data.map((b) => b.id);
+      const { data: convos, error: convoErr } = await supabase
+        .from("conversations")
+        .select("id, booking_id")
+        .in("booking_id", bookingIds);
+
+      if (convoErr) {
+        throw convoErr;
+      }
+
       return data.map((b) => ({
         ...b,
         teacher: teacherProfiles?.find((p) => p.user_id === b.teacher_id),
         selection: selections?.find((s) => s.id === b.student_test_selection_id),
+        conversationId: convos?.find((c) => c.booking_id === b.id)?.id,
       }));
     },
     enabled: !!user,
     onError: (err: any) => {
-      toast({
-        title: "Could not load pending requests",
-        description: err?.message ?? "Please try again.",
-        variant: "destructive",
-      });
+      console.error(err);
+      setErrorMessage(err?.message ?? "Impossible de charger vos demandes.");
     },
   });
 
@@ -132,23 +179,23 @@ const PendingRequestsPage = () => {
         </Button>
 
         <div className="mb-8">
-          <h1 className="text-3xl font-bold font-display">Pending Requests</h1>
+          <h1 className="text-3xl font-bold font-display">Mes réservations</h1>
           <p className="mt-2 text-muted-foreground">
-            These booking requests are waiting for teacher approval.
+            Suivez vos demandes de réservation et accédez à vos sessions confirmées.
           </p>
         </div>
 
+        {errorMessage && (
+          <ErrorToast message={errorMessage} onClose={() => setErrorMessage(null)} />
+        )}
+
         {isLoading ? (
-          <div className="space-y-4">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-24 animate-pulse rounded-xl bg-muted" />
-            ))}
-          </div>
+          <LoadingSpinner message="Chargement de vos demandes…" />
         ) : !requests?.length ? (
-          <div className="text-center py-16 text-muted-foreground">
-            <User className="mx-auto h-12 w-12 mb-4 opacity-30" />
-            <p>No pending requests at the moment.</p>
-          </div>
+          <EmptyState
+            title="Aucune demande pour l’instant"
+            description="Vos futures réservations apparaîtront ici."
+          />
         ) : (
           <div className="space-y-3">
             {requests.map((req) => (
@@ -184,13 +231,45 @@ const PendingRequestsPage = () => {
                             </span>
                           </>
                         )}
+                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Clock className="h-3.5 w-3.5" />
+                          {format(new Date(req.created_at), "dd/MM/yyyy 'à' HH:mm")}
+                        </span>
                       </div>
                     </div>
                   </div>
 
-                  <Badge variant="secondary" className="uppercase">
-                    pending
-                  </Badge>
+                  <div className="flex flex-col items-end gap-2">
+                    <Badge
+                      variant={req.status === "confirmed" ? "default" : "secondary"}
+                      className="uppercase"
+                    >
+                      {req.status}
+                    </Badge>
+                    <div className="flex gap-2">
+                      {req.status === "pending" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={cancelMutation.isPending}
+                          onClick={() => handleCancel(req.id)}
+                        >
+                          Annuler
+                        </Button>
+                      )}
+                      {req.status === "confirmed" && req.conversationId && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1"
+                          onClick={() => navigate(`/chat/${req.conversationId}`)}
+                        >
+                          <MessageSquare className="h-3.5 w-3.5" />
+                          Ouvrir la conversation
+                        </Button>
+                      )}
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             ))}
@@ -202,4 +281,51 @@ const PendingRequestsPage = () => {
 };
 
 export default PendingRequestsPage;
+
+const LoadingSpinner = ({ message }: { message?: string }) => (
+  <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+    <Loader2 className="mb-3 h-6 w-6 animate-spin" />
+    <p className="text-sm">{message || "Chargement..."}</p>
+  </div>
+);
+
+const EmptyState = ({
+  title,
+  description,
+}: {
+  title: string;
+  description?: string;
+}) => (
+  <div className="py-16 text-center text-muted-foreground">
+    <User className="mx-auto mb-4 h-12 w-12 opacity-30" />
+    <h2 className="mb-1 text-lg font-semibold font-display text-foreground">
+      {title}
+    </h2>
+    {description && <p className="text-sm">{description}</p>}
+  </div>
+);
+
+const ErrorToast = ({
+  message,
+  onClose,
+}: {
+  message: string;
+  onClose?: () => void;
+}) => (
+  <div className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+    <div className="flex items-start gap-2">
+      <AlertCircle className="mt-0.5 h-4 w-4" />
+      <span>{message}</span>
+    </div>
+    {onClose && (
+      <button
+        type="button"
+        onClick={onClose}
+        className="text-xs font-medium hover:underline"
+      >
+        Fermer
+      </button>
+    )}
+  </div>
+);
 
