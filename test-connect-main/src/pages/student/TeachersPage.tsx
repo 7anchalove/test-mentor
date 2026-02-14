@@ -119,18 +119,20 @@ const TeachersPage = () => {
 
       if (selErr) throw selErr;
 
-      // Create pending booking request (capacity is enforced by trigger)
+      // // Create booking request (STEP 1 of workflow)
       const { data: booking, error: bookErr } = await supabase
-        .from("bookings")
-        .insert({
-          student_id: user.id,
-          teacher_id: teacherId,
-          student_test_selection_id: selection.id,
-          start_date_time: datetimeStr,
-          status: "pending",
-        })
-        .select()
-        .single();
+      .from("bookings")
+      .insert({
+        student_id: user.id,
+        teacher_id: teacherId,
+        student_test_selection_id: selection.id,
+        start_date_time: datetimeStr,
+        status: "awaiting_receipt",
+        teacher_note: "WAITING_FOR_RECEIPT"
+      } as any)   // ← important
+      .select()
+      .single();    
+
 
       if (bookErr) throw bookErr;
       if (!booking) throw new Error("Booking request could not be created");
