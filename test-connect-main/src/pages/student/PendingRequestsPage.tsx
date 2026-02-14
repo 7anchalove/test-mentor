@@ -49,13 +49,12 @@ export default function PendingRequestsPage() {
     const { data } = supabase.storage.from("receipts").getPublicUrl(filePath);
 
     await supabase
-      .from("bookings")
-      .update({
-        receipt_url: data.publicUrl,
-        status: "pending_review",
-        receipt_uploaded_at: new Date().toISOString(),
-      })
-      .eq("id", bookingId);
+    .from("bookings")
+    .update({
+      receipt_url: data.publicUrl,
+      status: "pending_review",
+    } as any)
+    .eq("id", bookingId);  
 
     fetchBookings();
   };
