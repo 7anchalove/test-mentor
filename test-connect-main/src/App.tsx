@@ -11,9 +11,11 @@ import AuthPage from "./pages/AuthPage";
 import ChooseTestPage from "./pages/student/ChooseTestPage";
 import PickDateTimePage from "./pages/student/PickDateTimePage";
 import TeachersPage from "./pages/student/TeachersPage";
+import UploadReceiptPage from "./pages/student/UploadReceiptPage";
 import PendingRequestsPage from "./pages/student/PendingRequestsPage";
 import ChatPage from "./pages/ChatPage";
 import ConversationsPage from "./pages/ConversationsPage";
+import SessionsPage from "./pages/SessionsPage";
 import TeacherDashboard from "./pages/teacher/TeacherDashboard";
 import AvailabilityPage from "./pages/teacher/AvailabilityPage";
 import NotFound from "./pages/NotFound";
@@ -39,6 +41,7 @@ const App = () => (
             <Route path="/choose-test" element={<ProtectedRoute requiredRole="student"><ChooseTestPage /></ProtectedRoute>} />
             <Route path="/pick-datetime" element={<ProtectedRoute requiredRole="student"><PickDateTimePage /></ProtectedRoute>} />
             <Route path="/teachers" element={<ProtectedRoute requiredRole="student"><TeachersPage /></ProtectedRoute>} />
+            <Route path="/upload-receipt" element={<ProtectedRoute requiredRole="student"><UploadReceiptPage /></ProtectedRoute>} />
             <Route path="/pending-requests" element={<ProtectedRoute requiredRole="student"><PendingRequestsPage /></ProtectedRoute>} />
 
             {/* Teacher routes */}
@@ -46,6 +49,7 @@ const App = () => (
             <Route path="/availability" element={<ProtectedRoute requiredRole="teacher"><AvailabilityPage /></ProtectedRoute>} />
 
             {/* Shared routes */}
+            <Route path="/sessions" element={<ProtectedRoute><SessionsPage /></ProtectedRoute>} />
             <Route path="/conversations" element={<ProtectedRoute><ConversationsPage /></ProtectedRoute>} />
             <Route path="/chat/:conversationId" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
 

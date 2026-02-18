@@ -1,7 +1,7 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { GraduationCap, LogOut, MessageSquare, Calendar, LayoutDashboard, BookOpen } from "lucide-react";
+import { GraduationCap, LogOut, MessageSquare, Calendar, LayoutDashboard, BookOpen, ClipboardList } from "lucide-react";
 
 const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { profile, signOut } = useAuth();
@@ -18,11 +18,14 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const navItems = profile?.role === "teacher"
     ? [
         { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+        { path: "/sessions", label: "Sessions", icon: Calendar },
         { path: "/availability", label: "Availability", icon: Calendar },
         { path: "/conversations", label: "Messages", icon: MessageSquare },
       ]
     : [
         { path: "/choose-test", label: "Book a Test", icon: BookOpen },
+        { path: "/pending-requests", label: "Requests", icon: ClipboardList },
+        { path: "/sessions", label: "Sessions", icon: Calendar },
         { path: "/conversations", label: "Messages", icon: MessageSquare },
       ];
 

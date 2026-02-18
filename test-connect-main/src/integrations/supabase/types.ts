@@ -18,6 +18,9 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          receipt_mime: string | null
+          receipt_original_name: string | null
+          receipt_path: string | null
           start_date_time: string
           status: Database["public"]["Enums"]["booking_status"]
           student_id: string
@@ -28,6 +31,9 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          receipt_mime?: string | null
+          receipt_original_name?: string | null
+          receipt_path?: string | null
           start_date_time: string
           status?: Database["public"]["Enums"]["booking_status"]
           student_id: string
@@ -38,6 +44,9 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          receipt_mime?: string | null
+          receipt_original_name?: string | null
+          receipt_path?: string | null
           start_date_time?: string
           status?: Database["public"]["Enums"]["booking_status"]
           student_id?: string
@@ -190,6 +199,63 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      sessions: {
+        Row: {
+          booking_id: string
+          conversation_id: string | null
+          created_at: string
+          end_date_time: string
+          id: string
+          meeting_link: string | null
+          start_date_time: string
+          status: Database["public"]["Enums"]["session_status"]
+          student_id: string
+          teacher_id: string
+          updated_at: string
+        }
+        Insert: {
+          booking_id: string
+          conversation_id?: string | null
+          created_at?: string
+          end_date_time: string
+          id?: string
+          meeting_link?: string | null
+          start_date_time: string
+          status?: Database["public"]["Enums"]["session_status"]
+          student_id: string
+          teacher_id: string
+          updated_at?: string
+        }
+        Update: {
+          booking_id?: string
+          conversation_id?: string | null
+          created_at?: string
+          end_date_time?: string
+          id?: string
+          meeting_link?: string | null
+          start_date_time?: string
+          status?: Database["public"]["Enums"]["session_status"]
+          student_id?: string
+          teacher_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sessions_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: true
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sessions_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: true
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       teacher_availability_rules: {
         Row: {
@@ -362,6 +428,7 @@ export type Database = {
     Enums: {
       app_role: "student" | "teacher"
       booking_status: "pending" | "confirmed" | "cancelled"
+      session_status: "scheduled" | "completed" | "cancelled"
       test_category: "ITA_L2" | "TOLC" | "CENTS" | "CLA"
     }
     CompositeTypes: {

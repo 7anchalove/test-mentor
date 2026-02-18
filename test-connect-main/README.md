@@ -60,6 +60,21 @@ This project is built with:
 - shadcn-ui
 - Tailwind CSS
 
+## Supabase: Sessions (required)
+
+This app uses **bookings** (requests) and **sessions** (real appointments).
+
+After pulling the repo, run the SQL migration below in **Supabase SQL Editor**:
+
+- `supabase/migrations/20260218_create_sessions.sql`
+
+It adds:
+- `public.sessions` table
+- `session_status` enum
+- unique constraint/indexes to prevent duplicate accept/double-booking
+
+Once applied, the new **/sessions** page works for both student and teacher.
+
 ## How can I deploy this project?
 
 Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
