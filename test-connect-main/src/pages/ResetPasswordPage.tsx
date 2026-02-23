@@ -18,6 +18,7 @@ const ResetPasswordPage = () => {
   const [checkingSession, setCheckingSession] = useState(true);
   const [canReset, setCanReset] = useState(false);
   const [invalidMessage, setInvalidMessage] = useState<string | null>(null);
+  const [invalidCode, setInvalidCode] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
@@ -25,12 +26,38 @@ const ResetPasswordPage = () => {
 
     const init = async () => {
       try {
+        const queryParams = new URLSearchParams(window.location.search);
         const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : "";
         const hashParams = new URLSearchParams(hash);
+
+        const errorDescription =
+          hashParams.get("error_description") || queryParams.get("error_description");
+        const errorCode = hashParams.get("error_code") || queryParams.get("error_code");
+        if (errorDescription) {
+          const readableError = decodeURIComponent(errorDescription.replace(/\+/g, " "));
+          if (mounted) {
+            setInvalidMessage(readableError);
+            setInvalidCode(errorCode ?? null);
+            setCanReset(false);
+          }
+          return;
+        }
+
+        const code = queryParams.get("code");
         const accessToken = hashParams.get("access_token");
         const refreshToken = hashParams.get("refresh_token");
 
-        if (accessToken && refreshToken) {
+        if (code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error) {
+            if (mounted) {
+              setInvalidMessage("Link invalid/expired, request a new reset link.");
+              setInvalidCode(error.name || "exchange_code_failed");
+              setCanReset(false);
+            }
+            return;
+          }
+        } else if (accessToken && refreshToken) {
           const { error } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken,
@@ -38,26 +65,31 @@ const ResetPasswordPage = () => {
 
           if (error) {
             if (mounted) {
-              setInvalidMessage("This reset link is invalid or expired. Request a new one.");
+              setInvalidMessage("Link invalid/expired, request a new reset link.");
+              setInvalidCode(error.name || "set_session_failed");
               setCanReset(false);
             }
-          } else if (mounted) {
-            setCanReset(true);
+            return;
           }
-        } else {
-          const { data } = await supabase.auth.getSession();
+        }
+
+        const { data: userData, error: userErr } = await supabase.auth.getUser();
+        if (userErr || !userData.user) {
           if (mounted) {
-            if (data.session) {
-              setCanReset(true);
-            } else {
-              setInvalidMessage("Missing or expired reset tokens. Request a new reset link.");
-              setCanReset(false);
-            }
+            setInvalidMessage("Link invalid/expired, request a new reset link.");
+            setInvalidCode(userErr?.name || "missing_user");
+            setCanReset(false);
           }
+          return;
+        }
+
+        if (mounted) {
+          setCanReset(true);
         }
       } catch {
         if (mounted) {
-          setInvalidMessage("Could not validate reset session. Request a new reset link.");
+          setInvalidMessage("Link invalid/expired, request a new reset link.");
+          setInvalidCode("unexpected_error");
           setCanReset(false);
         }
       } finally {
@@ -74,7 +106,7 @@ const ResetPasswordPage = () => {
 
   const passwordError = useMemo(() => {
     if (!password && !confirmPassword) return null;
-    if (password.length < 6) return "Password must be at least 6 characters";
+    if (password.length < 8) return "Password must be at least 8 characters";
     if (password !== confirmPassword) return "Passwords do not match";
     return null;
   }, [password, confirmPassword]);
@@ -126,7 +158,7 @@ const ResetPasswordPage = () => {
         <Card className="glass-card">
           <CardHeader>
             <CardTitle>Set new password</CardTitle>
-            <CardDescription>Use at least 6 characters.</CardDescription>
+            <CardDescription>Use at least 8 characters.</CardDescription>
           </CardHeader>
           <CardContent>
             {checkingSession ? (
@@ -134,6 +166,9 @@ const ResetPasswordPage = () => {
             ) : invalidMessage ? (
               <div className="space-y-4">
                 <p className="text-sm text-destructive">{invalidMessage}</p>
+                {invalidCode ? (
+                  <p className="text-xs text-muted-foreground">Error code: {invalidCode}</p>
+                ) : null}
                 <Link to="/auth/forgot-password">
                   <Button className="w-full">Request new reset link</Button>
                 </Link>
