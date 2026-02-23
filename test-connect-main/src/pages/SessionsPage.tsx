@@ -25,6 +25,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import StatusBadge from "@/components/StatusBadge";
+import { isValidAbsoluteHttpUrl, normalizeMeetingUrl } from "@/lib/meetingUrl";
 
 type SessionStatus = "scheduled" | "completed" | "cancelled" | "declined";
 
@@ -111,9 +112,15 @@ const SessionsPage = () => {
   const updateMeetingLink = useMutation({
     mutationFn: async () => {
       if (!editSessionId) throw new Error("No session selected");
+
+      const normalized = normalizeMeetingUrl(meetingLinkDraft);
+      if (normalized && !isValidAbsoluteHttpUrl(normalized)) {
+        throw new Error("Invalid meeting link");
+      }
+
       const { error } = await supabase
         .from("sessions")
-        .update({ meeting_link: meetingLinkDraft || null })
+        .update({ meeting_link: normalized || null })
         .eq("id", editSessionId);
       if (error) throw error;
     },
@@ -238,6 +245,8 @@ const SessionsPage = () => {
 
     const start = new Date(session.start_date_time);
     const end = new Date(session.end_date_time);
+    const normalizedMeetingLink = normalizeMeetingUrl(session.meeting_link ?? "");
+    const canJoinMeeting = normalizedMeetingLink && isValidAbsoluteHttpUrl(normalizedMeetingLink);
 
     return (
       <Card className="transition-all hover:shadow-md">
@@ -260,14 +269,18 @@ const SessionsPage = () => {
             </div>
 
             {session.meeting_link ? (
-              <a
-                className="mt-3 inline-flex items-center gap-2 text-sm text-primary underline"
-                href={session.meeting_link}
-                target="_blank"
-                rel="noreferrer"
-              >
-                <LinkIcon className="h-4 w-4" /> Join meeting
-              </a>
+              canJoinMeeting ? (
+                <Button
+                  type="button"
+                  variant="link"
+                  className="mt-3 inline-flex h-auto items-center gap-2 p-0 text-sm"
+                  onClick={() => window.open(normalizedMeetingLink, "_blank", "noopener,noreferrer")}
+                >
+                  <LinkIcon className="h-4 w-4" /> Join meeting
+                </Button>
+              ) : (
+                <p className="mt-3 text-sm text-destructive">Invalid meeting link</p>
+              )
             ) : (
               <p className="mt-3 text-sm text-muted-foreground">Meeting link not set yet.</p>
             )}
