@@ -17,7 +17,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, CalendarIcon, Clock, BookOpen, User, MessageSquare, Loader2, Trash2 } from "lucide-react";
+import { ArrowLeft, CalendarIcon, Clock, BookOpen, User, Loader2, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import AppLayout from "@/components/layout/AppLayout";
 import { useToast } from "@/hooks/use-toast";
@@ -110,18 +110,10 @@ const PendingRequestsPage = () => {
         throw selErr;
       }
 
-      // Get conversations (only for confirmed bookings)
-      const bookingIds = data.map((b) => b.id);
-      const { data: convos } = await supabase
-        .from("conversations")
-        .select("id, booking_id")
-        .in("booking_id", bookingIds);
-
       return data.map((b) => ({
         ...b,
         teacher: teacherProfiles?.find((p) => p.user_id === b.teacher_id),
         selection: selections?.find((s) => s.id === b.student_test_selection_id),
-        conversationId: convos?.find((c) => c.booking_id === b.id)?.id,
       }));
     },
     enabled: !!user,
@@ -371,17 +363,6 @@ const PendingRequestsPage = () => {
                     <Badge variant="secondary" className={`uppercase ${getStatusUi(req.status).className}`}>
                       {getStatusUi(req.status).label}
                     </Badge>
-
-                    {req.status === "confirmed" && req.conversationId && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="gap-1"
-                        onClick={() => navigate(`/chat/${req.conversationId}`)}
-                      >
-                        <MessageSquare className="h-3.5 w-3.5" /> Chat
-                      </Button>
-                    )}
 
                     {canDeleteRequest(req.status) && (
                       <AlertDialog>

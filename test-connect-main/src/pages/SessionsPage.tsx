@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { CalendarIcon, Clock, Link as LinkIcon, CheckCircle2, Trash2 } from "lucide-react";
+import { CalendarIcon, Clock, Link as LinkIcon, CheckCircle2, Trash2, MessageSquare } from "lucide-react";
 
 import AppLayout from "@/components/layout/AppLayout";
 import { Card, CardContent } from "@/components/ui/card";
@@ -48,9 +49,12 @@ type Scope = "upcoming" | "past";
 type StatusFilter = "all" | "scheduled" | "completed" | "cancelled" | "declined";
 
 const SessionsPage = () => {
+  const navigate = useNavigate();
   const { user, profile } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const CONFIRMED_SESSION_STATUS: SessionStatus = "scheduled";
 
   const [editSessionId, setEditSessionId] = useState<string | null>(null);
   const [meetingLinkDraft, setMeetingLinkDraft] = useState<string>("");
@@ -67,6 +71,7 @@ const SessionsPage = () => {
       const base = supabase
         .from("sessions")
         .select("*")
+        .eq("status", CONFIRMED_SESSION_STATUS)
         .filter("is_archived", "eq", "false")
         .order("start_date_time", { ascending: true });
 
@@ -332,6 +337,17 @@ const SessionsPage = () => {
                 disabled={markCompleted.isPending}
               >
                 <CheckCircle2 className="h-4 w-4" /> Mark done
+              </Button>
+            )}
+
+            {session.status === CONFIRMED_SESSION_STATUS && session.conversation_id && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1"
+                onClick={() => navigate(`/chat/${session.conversation_id}`)}
+              >
+                <MessageSquare className="h-3.5 w-3.5" /> Chat
               </Button>
             )}
 
