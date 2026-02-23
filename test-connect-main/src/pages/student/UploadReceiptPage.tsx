@@ -12,6 +12,7 @@ import { ArrowLeft, FileUp, ShieldCheck } from "lucide-react";
 import { format } from "date-fns";
 import type { Database } from "@/integrations/supabase/types";
 import {
+  isDuplicateActiveBookingError,
   sendRequestSubmittedEmail,
   submitBookingForReview,
   uploadReceiptAndAttachToBooking,
@@ -78,9 +79,12 @@ export default function UploadReceiptPage() {
       navigate("/pending-requests", { replace: true });
     },
     onError: (err: any) => {
+      const isDuplicateBooking = isDuplicateActiveBookingError(err);
       toast({
         title: "Could not send request",
-        description: err?.message ?? "Please try again.",
+        description: isDuplicateBooking
+          ? "You already have a request at this time. Please choose another time."
+          : err?.message ?? "Please try again.",
         variant: "destructive",
       });
     },

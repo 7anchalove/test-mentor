@@ -11,6 +11,18 @@ export const ACCEPTED_RECEIPT_MIME = new Set([
   "image/jpeg",
 ]);
 
+export function isDuplicateActiveBookingError(err: unknown) {
+  const code = (err as any)?.code;
+  const message = String((err as any)?.message ?? "").toLowerCase();
+  const details = String((err as any)?.details ?? "").toLowerCase();
+
+  return (
+    code === "23505" ||
+    message.includes("uniq_booking_student_time_active") ||
+    details.includes("uniq_booking_student_time_active")
+  );
+}
+
 function getExtFromFile(file: File) {
   const name = file.name || "";
   const dot = name.lastIndexOf(".");

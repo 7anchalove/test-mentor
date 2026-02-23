@@ -23,6 +23,7 @@ import { format } from "date-fns";
 import type { Database } from "@/integrations/supabase/types";
 import {
   createAwaitingReceiptBooking,
+  isDuplicateActiveBookingError,
   sendRequestSubmittedEmail,
   submitBookingForReview,
   uploadReceiptAndAttachToBooking,
@@ -88,6 +89,7 @@ const TeachersPage = () => {
       setReceiptDialogOpen(true);
     },
     onError: (err: any) => {
+      const isDuplicateBooking = isDuplicateActiveBookingError(err);
       const isCapacityFull =
         err?.message?.includes("CAPACITY_FULL") ||
         err?.message?.toLowerCase?.().includes("capacity") ||
@@ -95,9 +97,11 @@ const TeachersPage = () => {
 
       toast({
         title: "Could not start request",
-        description: isCapacityFull
-          ? "This time slot is full for this teacher. Please pick another time or teacher."
-          : err?.message ?? "Please try again.",
+        description: isDuplicateBooking
+          ? "You already have a request at this time. Please choose another time."
+          : isCapacityFull
+            ? "This time slot is full for this teacher. Please pick another time or teacher."
+            : err?.message ?? "Please try again.",
         variant: "destructive",
       });
     },
@@ -146,6 +150,7 @@ const TeachersPage = () => {
       navigate("/pending-requests", { replace: true });
     },
     onError: (err: any) => {
+      const isDuplicateBooking = isDuplicateActiveBookingError(err);
       const isCapacityFull =
         err?.message?.includes("CAPACITY_FULL") ||
         err?.message?.toLowerCase?.().includes("capacity") ||
@@ -153,9 +158,11 @@ const TeachersPage = () => {
 
       toast({
         title: "Could not send request",
-        description: isCapacityFull
-          ? "This time slot is full for this teacher. Please pick another time or teacher."
-          : err?.message ?? "Please try again.",
+        description: isDuplicateBooking
+          ? "You already have a request at this time. Please choose another time."
+          : isCapacityFull
+            ? "This time slot is full for this teacher. Please pick another time or teacher."
+            : err?.message ?? "Please try again.",
         variant: "destructive",
       });
     },
