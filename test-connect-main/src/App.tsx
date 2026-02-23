@@ -8,6 +8,8 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 
 import Index from "./pages/Index";
 import AuthPage from "./pages/AuthPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 import ChooseTestPage from "./pages/student/ChooseTestPage";
 import PickDateTimePage from "./pages/student/PickDateTimePage";
 import TeachersPage from "./pages/student/TeachersPage";
@@ -34,6 +36,8 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<AuthPage />} />
+            <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/auth/reset-password" element={<ResetPasswordPage />} />
             <Route path="/student" element={<Navigate to="/auth" replace />} />
             <Route path="/teacher" element={<Navigate to="/auth" replace />} />
 
