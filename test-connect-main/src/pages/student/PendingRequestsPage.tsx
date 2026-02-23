@@ -1,15 +1,70 @@
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, CalendarIcon, Clock, BookOpen, User, MessageSquare } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { ArrowLeft, CalendarIcon, Clock, BookOpen, User, MessageSquare, Loader2, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import AppLayout from "@/components/layout/AppLayout";
 import { useToast } from "@/hooks/use-toast";
+
+type RequestStatus = "awaiting_receipt" | "pending_review" | "pending" | "confirmed" | "declined" | "cancelled";
+
+function getStatusUi(status: string | null | undefined): { label: string; className: string } {
+  const normalized = String(status ?? "").toLowerCase() as RequestStatus;
+
+  if (normalized === "awaiting_receipt" || normalized === "pending_review" || normalized === "pending") {
+    return {
+      label: "Pending",
+      className: "bg-amber-500 text-white border-transparent",
+    };
+  }
+
+  if (normalized === "confirmed") {
+    return {
+      label: "Confirmed",
+      className: "bg-success text-success-foreground border-transparent",
+    };
+  }
+
+  if (normalized === "declined") {
+    return {
+      label: "Declined",
+      className: "bg-destructive text-destructive-foreground border-transparent",
+    };
+  }
+
+  if (normalized === "cancelled") {
+    return {
+      label: "Cancelled",
+      className: "bg-destructive text-destructive-foreground border-transparent",
+    };
+  }
+
+  return {
+    label: "Pending",
+    className: "bg-amber-500 text-white border-transparent",
+  };
+}
+
+function canDeleteRequest(status: string | null | undefined) {
+  const normalized = String(status ?? "").toLowerCase();
+  return normalized === "declined" || normalized === "cancelled";
+}
 
 const PendingRequestsPage = () => {
   const { user } = useAuth();
@@ -17,9 +72,10 @@ const PendingRequestsPage = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const handledBookingsRef = useRef<Set<string>>(new Set());
+  const requestsQueryKey = ["student-requests", user?.id];
 
   const { data: requests, isLoading } = useQuery({
-    queryKey: ["student-requests", user?.id],
+    queryKey: requestsQueryKey,
     queryFn: async () => {
       if (!user) return [];
 
@@ -27,7 +83,7 @@ const PendingRequestsPage = () => {
         .from("bookings")
         .select("*")
         .eq("student_id", user.id)
-        .order("start_date_time", { ascending: true });
+        .order("created_at", { ascending: false });
 
       if (error) {
         throw error;
@@ -77,6 +133,90 @@ const PendingRequestsPage = () => {
       });
     },
   });
+
+  const deleteOneMutation = useMutation({
+    mutationFn: async (bookingId: string) => {
+      const { error } = await supabase
+        .from("bookings")
+        .delete()
+        .eq("id", bookingId);
+
+      if (error) throw error;
+      return bookingId;
+    },
+    onMutate: async (bookingId) => {
+      await queryClient.cancelQueries({ queryKey: requestsQueryKey });
+      const previous = queryClient.getQueryData<any[]>(requestsQueryKey);
+      queryClient.setQueryData<any[]>(requestsQueryKey, (old = []) =>
+        old.filter((request) => request.id !== bookingId)
+      );
+      return { previous };
+    },
+    onError: (err: any, _bookingId, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(requestsQueryKey, context.previous);
+      }
+      const isRls = err?.code === "42501" || String(err?.message ?? "").toLowerCase().includes("row-level security");
+      toast({
+        title: "Could not delete request",
+        description: isRls
+          ? "You can only delete your own declined or cancelled requests."
+          : err?.message ?? "Please try again.",
+        variant: "destructive",
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "Request deleted" });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: requestsQueryKey });
+    },
+  });
+
+  const deleteAllOldMutation = useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error("Not authenticated");
+      const { error, count } = await supabase
+        .from("bookings")
+        .delete({ count: "exact" })
+        .eq("student_id", user.id)
+        .in("status", ["declined", "cancelled"]);
+
+      if (error) throw error;
+      return count ?? 0;
+    },
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: requestsQueryKey });
+      const previous = queryClient.getQueryData<any[]>(requestsQueryKey);
+      queryClient.setQueryData<any[]>(requestsQueryKey, (old = []) =>
+        old.filter((request) => !canDeleteRequest(request.status))
+      );
+      return { previous };
+    },
+    onError: (err: any, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(requestsQueryKey, context.previous);
+      }
+      const isRls = err?.code === "42501" || String(err?.message ?? "").toLowerCase().includes("row-level security");
+      toast({
+        title: "Could not delete old requests",
+        description: isRls
+          ? "You can only delete your own declined or cancelled requests."
+          : err?.message ?? "Please try again.",
+        variant: "destructive",
+      });
+    },
+    onSuccess: (deletedCount) => {
+      toast({
+        title: deletedCount > 0 ? `${deletedCount} old request${deletedCount > 1 ? "s" : ""} deleted` : "No old requests to delete",
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: requestsQueryKey });
+    },
+  });
+
+  const oldRequests = (requests ?? []).filter((request) => canDeleteRequest(request.status));
 
   useEffect(() => {
     if (!user) return;
@@ -144,10 +284,42 @@ const PendingRequestsPage = () => {
         </Button>
 
         <div className="mb-8">
-          <h1 className="text-3xl font-bold font-display">Requests</h1>
-          <p className="mt-2 text-muted-foreground">
-            Track the status of your booking requests.
-          </p>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold font-display">Requests</h1>
+              <p className="mt-2 text-muted-foreground">
+                Track the status of your booking requests.
+              </p>
+            </div>
+
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" disabled={!oldRequests.length || deleteAllOldMutation.isPending}>
+                  {deleteAllOldMutation.isPending ? (
+                    <span className="inline-flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" /> Deleting...
+                    </span>
+                  ) : (
+                    "Delete all old"
+                  )}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete all old requests?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will delete all declined and cancelled requests. This cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => deleteAllOldMutation.mutate()} disabled={deleteAllOldMutation.isPending}>
+                    {deleteAllOldMutation.isPending ? "Deleting..." : "Confirm"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         </div>
 
         {isLoading ? (
@@ -200,20 +372,59 @@ const PendingRequestsPage = () => {
                     </div>
                   </div>
 
-                  <Badge variant="secondary" className="uppercase">
-                    {req.status}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className={`uppercase ${getStatusUi(req.status).className}`}>
+                      {getStatusUi(req.status).label}
+                    </Badge>
 
-                  {req.status === "confirmed" && req.conversationId && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="gap-1"
-                      onClick={() => navigate(`/chat/${req.conversationId}`)}
-                    >
-                      <MessageSquare className="h-3.5 w-3.5" /> Chat
-                    </Button>
-                  )}
+                    {req.status === "confirmed" && req.conversationId && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1"
+                        onClick={() => navigate(`/chat/${req.conversationId}`)}
+                      >
+                        <MessageSquare className="h-3.5 w-3.5" /> Chat
+                      </Button>
+                    )}
+
+                    {canDeleteRequest(req.status) && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="gap-1 text-destructive hover:text-destructive"
+                            disabled={deleteOneMutation.isPending || deleteAllOldMutation.isPending}
+                          >
+                            {deleteOneMutation.isPending && deleteOneMutation.variables === req.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-3.5 w-3.5" />
+                            )}
+                            Delete
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete this request?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => deleteOneMutation.mutate(req.id)}
+                              disabled={deleteOneMutation.isPending}
+                            >
+                              {deleteOneMutation.isPending && deleteOneMutation.variables === req.id ? "Deleting..." : "Confirm"}
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             ))}
