@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,26 +33,23 @@ const ForgotPasswordPage = () => {
     }
 
     setLoading(true);
-    const response = await fetch("/api/auth/forgot-password", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ email: parsed.data.email }),
-    });
+    const baseUrl = window.location.origin;
 
-    const payload = (await response.json().catch(() => null)) as
-      | { ok?: boolean; message?: string }
-      | null;
+    const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
+      redirectTo: `${baseUrl}/auth/reset-password`,
+    });
     setLoading(false);
 
-    if (!response.ok) {
-      if (response.status === 429) {
+    if (error) {
+      const message = String(error.message || "").toLowerCase();
+      const status = (error as { status?: number; code?: string }).status;
+      const code = String((error as { status?: number; code?: string }).code || "").toLowerCase();
+      const isRateLimited = message.includes("rate limit") || status === 429 || code === "429";
+
+      if (isRateLimited) {
         toast({
           title: "Please try again later",
-          description:
-            payload?.message ??
-            "Too many reset requests. Please wait a minute and try again.",
+          description: "Too many reset requests. Please wait a minute and try again.",
           variant: "destructive",
         });
         return;
@@ -59,7 +57,7 @@ const ForgotPasswordPage = () => {
 
       toast({
         title: "Could not send reset email",
-        description: payload?.message ?? "Please try again.",
+        description: error.message,
         variant: "destructive",
       });
       return;
