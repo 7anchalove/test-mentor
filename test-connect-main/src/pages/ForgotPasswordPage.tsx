@@ -39,6 +39,20 @@ const ForgotPasswordPage = () => {
     setLoading(false);
 
     if (error) {
+      const message = String(error.message || "").toLowerCase();
+      const status = (error as { status?: number; code?: string }).status;
+      const code = String((error as { status?: number; code?: string }).code || "").toLowerCase();
+      const isRateLimited = message.includes("rate limit") || status === 429 || code === "429";
+
+      if (isRateLimited) {
+        toast({
+          title: "Please try again later",
+          description: "Too many reset requests. Please wait a few minutes and try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       toast({
         title: "Could not send reset email",
         description: error.message,
