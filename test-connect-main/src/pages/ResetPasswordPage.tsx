@@ -111,6 +111,23 @@ const ResetPasswordPage = () => {
     return null;
   }, [password, confirmPassword]);
 
+  const handleBackToLogin = async () => {
+    setLoading(true);
+    const { error } = await supabase.auth.signOut();
+    setLoading(false);
+
+    if (error) {
+      toast({
+        title: "Could not clear session",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    navigate("/auth", { replace: true });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -138,10 +155,6 @@ const ResetPasswordPage = () => {
       title: "Password updated",
       description: "Your password has been reset successfully.",
     });
-
-    setTimeout(() => {
-      navigate("/auth", { replace: true });
-    }, 1500);
   };
 
   return (
@@ -175,10 +188,10 @@ const ResetPasswordPage = () => {
               </div>
             ) : success ? (
               <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">Password updated. Redirecting to login...</p>
-                <Link to="/auth">
-                  <Button className="w-full">Go to Log In</Button>
-                </Link>
+                <p className="text-sm text-muted-foreground">Changes made successfully</p>
+                <Button className="w-full" onClick={handleBackToLogin} disabled={loading}>
+                  {loading ? "Returning..." : "Back to login"}
+                </Button>
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -208,7 +221,7 @@ const ResetPasswordPage = () => {
                 {passwordError ? <p className="text-sm text-destructive">{passwordError}</p> : null}
 
                 <Button type="submit" className="w-full" disabled={loading || Boolean(passwordError)}>
-                  {loading ? "Updating..." : "Update password"}
+                  {loading ? "Saving..." : "Save changes"}
                 </Button>
               </form>
             )}
