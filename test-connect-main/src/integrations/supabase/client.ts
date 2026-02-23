@@ -4,14 +4,25 @@ import type { Database } from './types';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const HAS_SUPABASE_CONFIG = Boolean(SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY);
+
+if (!HAS_SUPABASE_CONFIG && import.meta.env.DEV) {
+  console.error(
+    'Missing Supabase env vars. Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in .env'
+  );
+}
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+export const supabase = createClient<Database>(
+  HAS_SUPABASE_CONFIG ? SUPABASE_URL : 'https://example.supabase.co',
+  HAS_SUPABASE_CONFIG ? SUPABASE_PUBLISHABLE_KEY : 'public-anon-key',
+  {
   auth: {
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
-  }
-});
+  },
+}
+);

@@ -120,7 +120,7 @@ const PendingRequestsPage = () => {
             navigate(`/chat/${convo.id}`);
           }
 
-          if (updated.status === "cancelled") {
+          if (updated.status === "declined" || updated.status === "cancelled") {
             toast({
               title: "Request declined",
               description: "The teacher declined your request. You can book another teacher/time.",

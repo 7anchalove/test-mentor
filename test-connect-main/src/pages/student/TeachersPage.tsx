@@ -21,20 +21,15 @@ import { useToast } from "@/hooks/use-toast";
 import AppLayout from "@/components/layout/AppLayout";
 import { format } from "date-fns";
 import type { Database } from "@/integrations/supabase/types";
+import {
+  createAwaitingReceiptBooking,
+  sendRequestSubmittedEmail,
+  submitBookingForReview,
+  uploadReceiptAndAttachToBooking,
+  validateReceiptFile,
+} from "@/lib/bookings";
 
 type TestCategory = Database["public"]["Enums"]["test_category"];
-
-const ACCEPTED_MIME = new Set(["application/pdf", "image/png", "image/jpeg"]);
-
-function getExtFromFile(file: File) {
-  const name = file.name || "";
-  const dot = name.lastIndexOf(".");
-  if (dot >= 0) return name.slice(dot + 1).toLowerCase();
-  if (file.type === "application/pdf") return "pdf";
-  if (file.type === "image/png") return "png";
-  if (file.type === "image/jpeg") return "jpg";
-  return "bin";
-}
 
 interface TeacherWithAvailability {
   userId: string;
@@ -56,6 +51,7 @@ const TeachersPage = () => {
   const [bookingTeacherId, setBookingTeacherId] = useState<string | null>(null);
   const [receiptDialogOpen, setReceiptDialogOpen] = useState(false);
   const [selectedTeacherId, setSelectedTeacherId] = useState<string | null>(null);
+  const [activeBookingId, setActiveBookingId] = useState<string | null>(null);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
 
   const category = searchParams.get("category") as TestCategory;
@@ -65,94 +61,88 @@ const TeachersPage = () => {
 
   const canSubmitReceipt = useMemo(() => {
     if (!user) return false;
-    if (!selectedTeacherId) return false;
-    if (!category || !datetimeStr) return false;
-    if (!receiptFile) return false;
-    if (!ACCEPTED_MIME.has(receiptFile.type)) return false;
+    if (!selectedTeacherId || !activeBookingId) return false;
+    if (validateReceiptFile(receiptFile) !== null) return false;
     return true;
-  }, [user, selectedTeacherId, category, datetimeStr, receiptFile]);
+  }, [user, selectedTeacherId, activeBookingId, receiptFile]);
+
+  const startRequestMutation = useMutation({
+    mutationFn: async (teacherId: string) => {
+      if (!user) throw new Error("Not authenticated");
+      if (!category || !datetimeStr) throw new Error("Missing test category or date/time");
+
+      const booking = await createAwaitingReceiptBooking({
+        studentId: user.id,
+        teacherId,
+        category,
+        subtype,
+        datetimeStr,
+      });
+
+      return booking;
+    },
+    onSuccess: (booking, teacherId) => {
+      setSelectedTeacherId(teacherId);
+      setActiveBookingId(booking.id);
+      setReceiptFile(null);
+      setReceiptDialogOpen(true);
+    },
+    onError: (err: any) => {
+      const isCapacityFull =
+        err?.message?.includes("CAPACITY_FULL") ||
+        err?.message?.toLowerCase?.().includes("capacity") ||
+        err?.message?.toLowerCase?.().includes("slot is full");
+
+      toast({
+        title: "Could not start request",
+        description: isCapacityFull
+          ? "This time slot is full for this teacher. Please pick another time or teacher."
+          : err?.message ?? "Please try again.",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      setBookingTeacherId(null);
+    },
+  });
 
   const sendRequestMutation = useMutation({
     mutationFn: async () => {
       if (!user) throw new Error("Not authenticated");
-      if (!selectedTeacherId) throw new Error("No teacher selected");
-      if (!receiptFile) throw new Error("Receipt is required");
-      if (!ACCEPTED_MIME.has(receiptFile.type)) {
-        throw new Error("Only PDF, PNG, or JPEG files are allowed");
-      }
+      if (!activeBookingId) throw new Error("Booking draft is missing");
+      const validationError = validateReceiptFile(receiptFile);
+      if (validationError) throw new Error(validationError);
 
-      // 1) Upload receipt to Storage (path is prefixed by student id for Storage policies)
-      const ext = getExtFromFile(receiptFile);
-      const safeName = receiptFile.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80);
-      const receiptPath = `${user.id}/${Date.now()}_${crypto.randomUUID()}_${safeName}.${ext}`;
-      const { error: upErr } = await supabase.storage
-        .from("booking-receipts")
-        .upload(receiptPath, receiptFile, {
-          cacheControl: "3600",
-          upsert: false,
-          contentType: receiptFile.type,
-        });
-      if (upErr) throw upErr;
+      await uploadReceiptAndAttachToBooking({
+        bookingId: activeBookingId,
+        studentId: user.id,
+        file: receiptFile!,
+      });
 
-      // 2) Create student test selection
-      const { data: selection, error: selErr } = await supabase
-        .from("student_test_selections")
-        .insert({
-          student_id: user.id,
-          test_category: category,
-          test_subtype: subtype,
-          test_date_time: datetimeStr,
-        })
-        .select()
-        .single();
-      if (selErr) throw selErr;
+      await submitBookingForReview({
+        bookingId: activeBookingId,
+        studentId: user.id,
+      });
 
-      // 3) Create booking request (pending)
-      const { data: booking, error: bookErr } = await supabase
-        .from("bookings")
-        .insert({
-          student_id: user.id,
-          teacher_id: selectedTeacherId,
-          student_test_selection_id: selection.id,
-          start_date_time: datetimeStr,
-          status: "pending",
-          receipt_path: receiptPath,
-          receipt_mime: receiptFile.type,
-          receipt_original_name: receiptFile.name,
-        } as any)
-        .select()
-        .single();
-      if (bookErr) throw bookErr;
-      if (!booking) throw new Error("Booking request could not be created");
+      await sendRequestSubmittedEmail({
+        toEmail: user.email,
+        category,
+        subtype,
+        datetimeStr,
+      });
 
-      // 4) Email confirmation to student (best-effort)
-      try {
-        await supabase.functions.invoke("booking-notify", {
-          body: {
-            kind: "request_submitted",
-            to: user.email,
-            payload: {
-              test_category: category,
-              test_subtype: subtype,
-              test_date_time: datetimeStr,
-            },
-          },
-        });
-      } catch {
-        // best-effort
-      }
-
-      return booking;
+      return activeBookingId;
     },
     onSuccess: () => {
       toast({
         title: "Request sent successfully",
-        description: "Your receipt was uploaded and your request is now pending teacher approval.",
+        description: "Your receipt was uploaded and your request is now pending teacher review.",
       });
       queryClient.invalidateQueries({ queryKey: ["student-requests", user?.id] });
       setReceiptDialogOpen(false);
       setReceiptFile(null);
       setSelectedTeacherId(null);
+      setActiveBookingId(null);
       navigate("/pending-requests", { replace: true });
     },
     onError: (err: any) => {
@@ -168,9 +158,6 @@ const TeachersPage = () => {
           : err?.message ?? "Please try again.",
         variant: "destructive",
       });
-    },
-    onSettled: () => {
-      setBookingTeacherId(null);
     },
   });
 
@@ -248,10 +235,8 @@ const TeachersPage = () => {
       return;
     }
 
-    // Receipt is mandatory before sending a request — show a dialog in-place
-    setSelectedTeacherId(teacherId);
-    setReceiptFile(null);
-    setReceiptDialogOpen(true);
+    setBookingTeacherId(teacherId);
+    startRequestMutation.mutate(teacherId);
   };
 
   return (
@@ -322,10 +307,10 @@ const TeachersPage = () => {
                       {teacher.isAvailable && (
                         <Button
                           size="sm"
-                          disabled={bookingTeacherId !== null}
+                          disabled={bookingTeacherId !== null || startRequestMutation.isPending || sendRequestMutation.isPending}
                           onClick={() => handleSelectTeacher(teacher.userId)}
                         >
-                          {bookingTeacherId === teacher.userId ? "Booking..." : "Select"}
+                          {bookingTeacherId === teacher.userId ? "Starting..." : "Select"}
                         </Button>
                       )}
                     </div>
@@ -343,6 +328,7 @@ const TeachersPage = () => {
             if (!open) {
               setReceiptFile(null);
               setSelectedTeacherId(null);
+              setActiveBookingId(null);
             }
           }}
         >
@@ -367,7 +353,7 @@ const TeachersPage = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="receipt">Receipt file (PDF / PNG / JPEG)</Label>
+                <Label htmlFor="receipt">Receipt file (PDF / PNG / JPEG, max 10MB)</Label>
                 <Input
                   id="receipt"
                   type="file"
@@ -378,10 +364,11 @@ const TeachersPage = () => {
                       setReceiptFile(null);
                       return;
                     }
-                    if (!ACCEPTED_MIME.has(f.type)) {
+                    const validationError = validateReceiptFile(f);
+                    if (validationError) {
                       toast({
-                        title: "Invalid file type",
-                        description: "Please upload a PDF, PNG, or JPEG file.",
+                        title: "Invalid receipt file",
+                        description: validationError,
                         variant: "destructive",
                       });
                       e.target.value = "";
@@ -417,7 +404,7 @@ const TeachersPage = () => {
                 }}
                 disabled={!canSubmitReceipt || sendRequestMutation.isPending}
               >
-                {sendRequestMutation.isPending ? "Sending..." : "Send request"}
+                {sendRequestMutation.isPending ? "Submitting..." : "Submit request"}
               </Button>
             </DialogFooter>
           </DialogContent>

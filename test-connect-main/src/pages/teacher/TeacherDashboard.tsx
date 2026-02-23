@@ -34,7 +34,7 @@ const TeacherDashboard = () => {
         },
         (payload) => {
           const row = payload.new as any;
-          if (row?.status !== "pending") return;
+          if (row?.status !== "pending_review") return;
           toast({
             title: "New booking request",
             description: "Open Requests to review it.",
@@ -95,10 +95,14 @@ const TeacherDashboard = () => {
     enabled: !!user,
   });
 
+  const getStatus = (booking: any) => String(booking?.status ?? "");
   const pending =
-    bookings?.filter((b) => b.status === "pending") || [];
+    bookings?.filter((b) => getStatus(b) === "pending_review") || [];
   const nonPending =
-    bookings?.filter((b) => b.status !== "pending") || [];
+    bookings?.filter((b) => {
+      const status = getStatus(b);
+      return status !== "pending_review" && status !== "awaiting_receipt";
+    }) || [];
   const upcoming = nonPending.filter((b) => new Date(b.start_date_time) >= new Date());
   const past = nonPending.filter((b) => new Date(b.start_date_time) < new Date());
 
@@ -188,7 +192,7 @@ const TeacherDashboard = () => {
     mutationFn: async (booking: any) => {
       const { error } = await supabase
         .from("bookings")
-        .update({ status: "cancelled" })
+        .update({ status: "declined" } as any)
         .eq("id", booking.id);
 
       if (error) throw error;
