@@ -99,6 +99,32 @@ export type Database = {
           },
         ]
       }
+      conversation_participants: {
+        Row: {
+          conversation_id: string
+          deleted_at: string | null
+          user_id: string
+        }
+        Insert: {
+          conversation_id: string
+          deleted_at?: string | null
+          user_id: string
+        }
+        Update: {
+          conversation_id?: string
+          deleted_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_participants_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           conversation_id: string
@@ -408,6 +434,14 @@ export type Database = {
           p_start_date_time: string
         }
         Returns: Database["public"]["Tables"]["bookings"]["Row"][]
+      }
+      delete_all_conversations_for_me: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      delete_conversation_for_me: {
+        Args: { p_conversation_id: string }
+        Returns: undefined
       }
       get_teachers_availability: {
         Args: { p_datetime_utc: string; p_test_category?: Database["public"]["Enums"]["test_category"] | null }

@@ -1,32 +1,69 @@
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent } from "@/components/ui/card";
-import { MessageSquare, User } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { MessageSquare, User, Loader2, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import AppLayout from "@/components/layout/AppLayout";
+import { useToast } from "@/hooks/use-toast";
+
+type ConversationListItem = {
+  id: string;
+  booking_id: string | null;
+  student_id: string;
+  teacher_id: string;
+  updated_at: string;
+  otherProfile?: { user_id: string; name: string; role: string } | null;
+  testSelection?: {
+    id: string;
+    test_category: string;
+    test_subtype: string | null;
+    test_date_time: string;
+  } | null;
+};
 
 const ConversationsPage = () => {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const queryKey = ["conversations", user?.id];
 
   const { data: conversations, isLoading } = useQuery({
-    queryKey: ["conversations", user?.id],
+    queryKey,
     queryFn: async () => {
       if (!user) return [];
 
       const { data, error } = await supabase
-        .from("conversations")
-        .select("*")
-        .or(`student_id.eq.${user.id},teacher_id.eq.${user.id}`)
-        .order("updated_at", { ascending: false });
+        .from("conversation_participants")
+        .select("conversation_id, conversations(*)")
+        .eq("user_id", user.id)
+        .is("deleted_at", null);
 
       if (error) throw error;
       if (!data?.length) return [];
 
+      const rows = data as Array<{ conversation_id: string; conversations: any }>;
+      const convoRows = rows
+        .map((row) => row.conversations)
+        .filter(Boolean)
+        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+
       // Get all other user IDs
-      const otherIds = data.map((c) =>
+      const otherIds = convoRows.map((c) =>
         c.student_id === user.id ? c.teacher_id : c.student_id
       );
 
@@ -36,7 +73,7 @@ const ConversationsPage = () => {
         .in("user_id", otherIds);
 
       // Get booking info
-      const bookingIds = data.filter((c) => c.booking_id).map((c) => c.booking_id!);
+      const bookingIds = convoRows.filter((c) => c.booking_id).map((c) => c.booking_id!);
       const bookingMap = new Map();
       if (bookingIds.length) {
         const { data: bookings } = await supabase
@@ -58,23 +95,118 @@ const ConversationsPage = () => {
         }
       }
 
-      return data.map((c) => ({
+      return convoRows.map((c) => ({
         ...c,
         otherProfile: profiles?.find(
           (p) => p.user_id === (c.student_id === user.id ? c.teacher_id : c.student_id)
         ),
         testSelection: c.booking_id ? bookingMap.get(c.booking_id) : null,
-      }));
+      })) as ConversationListItem[];
     },
     enabled: !!user,
+  });
+
+  const deleteOneMutation = useMutation({
+    mutationFn: async (conversationId: string) => {
+      const { error } = await supabase.rpc("delete_conversation_for_me", {
+        p_conversation_id: conversationId,
+      });
+      if (error) throw error;
+      return conversationId;
+    },
+    onMutate: async (conversationId) => {
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData<ConversationListItem[]>(queryKey);
+      queryClient.setQueryData<ConversationListItem[]>(queryKey, (old = []) =>
+        old.filter((conversation) => conversation.id !== conversationId)
+      );
+      return { previous };
+    },
+    onError: (err: any, _conversationId, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(queryKey, context.previous);
+      }
+      toast({
+        title: "Could not delete conversation",
+        description: err?.message ?? "Please try again.",
+        variant: "destructive",
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "Conversation deleted" });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey });
+    },
+  });
+
+  const deleteAllMutation = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.rpc("delete_all_conversations_for_me");
+      if (error) throw error;
+    },
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData<ConversationListItem[]>(queryKey);
+      queryClient.setQueryData<ConversationListItem[]>(queryKey, []);
+      return { previous };
+    },
+    onError: (err: any, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(queryKey, context.previous);
+      }
+      toast({
+        title: "Could not delete all conversations",
+        description: err?.message ?? "Please try again.",
+        variant: "destructive",
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "All conversations deleted" });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey });
+    },
   });
 
   return (
     <AppLayout>
       <div className="mx-auto max-w-2xl">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold font-display">Messages</h1>
-          <p className="mt-2 text-muted-foreground">Your conversations with {profile?.role === "teacher" ? "students" : "teachers"}</p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h1 className="text-3xl font-bold font-display">Messages</h1>
+              <p className="mt-2 text-muted-foreground">Your conversations with {profile?.role === "teacher" ? "students" : "teachers"}</p>
+            </div>
+
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" disabled={!conversations?.length || deleteAllMutation.isPending}>
+                  {deleteAllMutation.isPending ? (
+                    <span className="inline-flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" /> Deleting...
+                    </span>
+                  ) : (
+                    "Delete all"
+                  )}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete all conversations?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will hide all conversations for your account. This cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => deleteAllMutation.mutate()} disabled={deleteAllMutation.isPending}>
+                    {deleteAllMutation.isPending ? "Deleting..." : "Confirm"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         </div>
 
         {isLoading ? (
@@ -115,6 +247,42 @@ const ConversationsPage = () => {
                   <span className="text-xs text-muted-foreground shrink-0">
                     {format(new Date(convo.updated_at), "MMM d")}
                   </span>
+
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="gap-1 text-destructive hover:text-destructive"
+                        disabled={deleteOneMutation.isPending || deleteAllMutation.isPending}
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        {deleteOneMutation.isPending && deleteOneMutation.variables === convo.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-3.5 w-3.5" />
+                        )}
+                        Delete
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent onClick={(event) => event.stopPropagation()}>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete this conversation?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will hide it for you only. This cannot be undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => deleteOneMutation.mutate(convo.id)}
+                          disabled={deleteOneMutation.isPending}
+                        >
+                          {deleteOneMutation.isPending && deleteOneMutation.variables === convo.id ? "Deleting..." : "Confirm"}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </CardContent>
               </Card>
             ))}
