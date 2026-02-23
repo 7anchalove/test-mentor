@@ -11,6 +11,7 @@ import { format } from "date-fns";
 import AppLayout from "@/components/layout/AppLayout";
 import { useToast } from "@/hooks/use-toast";
 import { useEffect, useMemo, useState } from "react";
+import StatusBadge from "@/components/StatusBadge";
 
 const TeacherDashboard = () => {
   const { user } = useAuth();
@@ -366,9 +367,7 @@ const BookingCard: React.FC<BookingCardProps> = ({ booking, onChat }) => (
       </div>
 
       <div className="flex items-center gap-2">
-        <Badge variant={booking.status === "confirmed" ? "default" : "secondary"}>
-          {booking.status}
-        </Badge>
+        <StatusBadge status={booking.status} />
         {booking.conversationId && (
           <Button size="sm" variant="outline" onClick={onChat} className="gap-1">
             <MessageSquare className="h-3.5 w-3.5" /> Chat
