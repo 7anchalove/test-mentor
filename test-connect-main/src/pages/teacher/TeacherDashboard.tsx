@@ -109,21 +109,13 @@ const TeacherDashboard = () => {
 
   const acceptMutation = useMutation({
     mutationFn: async (booking: any) => {
-      // Create (or reuse) a conversation for this booking
-      const { data: convo, error: convoErr } = await supabase
-        .from("conversations")
-        .upsert(
-          {
-            student_id: booking.student_id,
-            teacher_id: booking.teacher_id,
-            booking_id: booking.id,
-          },
-          { onConflict: "booking_id" }
-        )
-        .select()
-        .single();
+      const { data: conversationId, error: convoErr } = await supabase.rpc("ensure_conversation_for_booking", {
+        p_booking_id: booking.id,
+      });
 
-      if (convoErr || !convo) throw convoErr ?? new Error("Could not create conversation");
+      if (convoErr || !conversationId) {
+        throw convoErr ?? new Error("Could not create conversation");
+      }
 
       // Create (or reuse) a session row so this booking becomes a real appointment
       const start = new Date(booking.start_date_time);
@@ -135,7 +127,7 @@ const TeacherDashboard = () => {
         .upsert(
           {
             booking_id: booking.id,
-            conversation_id: convo.id,
+            conversation_id: conversationId,
             student_id: booking.student_id,
             teacher_id: booking.teacher_id,
             start_date_time: booking.start_date_time,
@@ -171,7 +163,7 @@ const TeacherDashboard = () => {
         // ignore
       }
 
-      return convo;
+      return conversationId;
     },
     onSuccess: () => {
       toast({

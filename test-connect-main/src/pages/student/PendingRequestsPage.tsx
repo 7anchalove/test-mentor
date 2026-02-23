@@ -245,19 +245,14 @@ const PendingRequestsPage = () => {
           queryClient.invalidateQueries({ queryKey: ["student-requests", user.id] });
 
           if (updated.status === "confirmed") {
-            // Find conversation created for this booking
-            const { data: convo, error } = await supabase
-              .from("conversations")
-              .select("id")
-              .eq("booking_id", bookingId)
-              .order("created_at", { ascending: false })
-              .limit(1)
-              .maybeSingle();
+            const { data: conversationId, error } = await supabase.rpc("ensure_conversation_for_booking", {
+              p_booking_id: bookingId,
+            });
 
-            if (error || !convo) return;
+            if (error || !conversationId) return;
 
             toast({ title: "Teacher accepted — chat is now available" });
-            navigate(`/chat/${convo.id}`);
+            navigate(`/chat/${conversationId}`);
           }
 
           if (updated.status === "declined" || updated.status === "cancelled") {

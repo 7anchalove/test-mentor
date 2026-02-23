@@ -443,6 +443,10 @@ export type Database = {
         Args: { p_conversation_id: string }
         Returns: undefined
       }
+      ensure_conversation_for_booking: {
+        Args: { p_booking_id: string }
+        Returns: string
+      }
       get_teachers_availability: {
         Args: { p_datetime_utc: string; p_test_category?: Database["public"]["Enums"]["test_category"] | null }
         Returns: { teacher_id: string; is_available: boolean; booking_count_at_slot: number; computed_capacity: number; spots_left: number }[]
