@@ -123,6 +123,7 @@ export async function createBookingRequest(params: {
     start_date_time: datetimeStr,
     status,
     receipt_url: normalizedReceiptUrl,
+    receipt_uploaded_at: new Date().toISOString(),
     receipt_path: receipt.receiptPath,
     receipt_mime: receipt.receiptMime,
     receipt_original_name: receipt.receiptOriginalName,
