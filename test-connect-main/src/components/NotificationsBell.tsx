@@ -11,7 +11,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { getNotificationHref } from "@/lib/notificationHref";
 
 type NotificationItem = {
   id: string;
@@ -33,6 +32,7 @@ const MAX_NOTIFICATIONS = 20;
 const NotificationsBell = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 
@@ -175,24 +175,30 @@ const NotificationsBell = () => {
   };
 
   const handleNotificationClick = async (notification: NotificationItem) => {
+    if (!notification.id) return;
+
     if (!notification.is_read) {
-      await markAsRead(notification.id);
+      const { error } = await supabase
+        .from("notifications")
+        .update({ is_read: true })
+        .eq("id", notification.id);
+
+      if (!error) {
+        setNotifications((prev) =>
+          prev.map((item) => (item.id === notification.id ? { ...item, is_read: true } : item)),
+        );
+      }
     }
 
-    const href = getNotificationHref(notification);
-    if (!href) {
-      console.warn("[NotificationsBell] Notification has no navigable destination", {
-        id: notification.id,
-        action_url: notification.action_url,
-      });
-      return;
+    if (notification.action_url) {
+      navigate(notification.action_url);
     }
 
-    navigate(href);
+    setOpen(false);
   };
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" className="relative" aria-label="Open notifications">
           <Bell className="h-4 w-4" />
