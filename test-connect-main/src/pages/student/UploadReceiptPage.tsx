@@ -35,12 +35,12 @@ export default function UploadReceiptPage() {
   const subtype = searchParams.get("subtype") || null;
   const datetimeStr = searchParams.get("datetime") || "";
 
-  const [file, setFile] = useState<File | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadedReceipt, setUploadedReceipt] = useState<UploadedReceipt | null>(null);
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
-  const [flowError, setFlowError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const canUpload = useMemo(() => validateReceiptFile(file) === null, [file]);
+  const canUpload = useMemo(() => validateReceiptFile(selectedFile) === null, [selectedFile]);
   const canSubmit = useMemo(() => {
     return Boolean(user && teacherId && category && datetimeStr && receiptUrl && uploadedReceipt);
   }, [user, teacherId, category, datetimeStr, receiptUrl, uploadedReceipt]);
@@ -48,19 +48,19 @@ export default function UploadReceiptPage() {
   const uploadMutation = useMutation({
     mutationFn: async () => {
       if (!user) throw new Error("Not authenticated");
-      const validationError = validateReceiptFile(file);
+      const validationError = validateReceiptFile(selectedFile);
       if (validationError) throw new Error(validationError);
 
       const uploaded = await uploadReceipt({
         studentId: user.id,
-        file: file!,
+        file: selectedFile!,
       });
       return uploaded;
     },
     onSuccess: (uploaded) => {
       setUploadedReceipt(uploaded);
       setReceiptUrl(uploaded.receiptUrl);
-      setFlowError(null);
+      setError(null);
       toast({
         title: "Receipt uploaded",
         description: "Receipt uploaded successfully. You can now submit your request.",
@@ -68,7 +68,7 @@ export default function UploadReceiptPage() {
     },
     onError: (err: any) => {
       const message = err?.message ?? "Receipt upload failed. Please try again.";
-      setFlowError(message);
+      setError(message);
       toast({
         title: "Upload failed",
         description: message,
@@ -90,6 +90,7 @@ export default function UploadReceiptPage() {
         category,
         subtype,
         datetimeStr,
+        receiptUrl,
         receipt: uploadedReceipt,
       });
 
@@ -101,7 +102,7 @@ export default function UploadReceiptPage() {
       });
     },
     onSuccess: () => {
-      setFlowError(null);
+      setError(null);
       toast({
         title: "Request submitted",
         description: "Your receipt was uploaded and your booking request is now pending.",
@@ -115,7 +116,7 @@ export default function UploadReceiptPage() {
         ? "You already have a request at this time. Please choose another time."
         : err?.message ?? "Please try again.";
 
-      setFlowError(message);
+      setError(message);
       toast({
         title: "Could not submit request",
         description: message,
@@ -123,6 +124,9 @@ export default function UploadReceiptPage() {
       });
     },
   });
+
+  const isUploading = uploadMutation.isPending;
+  const isSubmitting = submitMutation.isPending;
 
   const selectedDate = datetimeStr ? new Date(datetimeStr) : null;
 
@@ -174,15 +178,15 @@ export default function UploadReceiptPage() {
                   id="receipt"
                   type="file"
                   accept="application/pdf,image/png,image/jpeg"
-                  disabled={uploadMutation.isPending || submitMutation.isPending}
+                  disabled={isUploading || isSubmitting}
                   onChange={(e) => {
                     const selectedFile = e.target.files?.[0] || null;
-                    setFlowError(null);
+                    setError(null);
                     setUploadedReceipt(null);
                     setReceiptUrl(null);
 
                     if (!selectedFile) {
-                      setFile(null);
+                      setSelectedFile(null);
                       return;
                     }
 
@@ -194,19 +198,19 @@ export default function UploadReceiptPage() {
                         variant: "destructive",
                       });
                       e.target.value = "";
-                      setFile(null);
+                      setSelectedFile(null);
                       return;
                     }
 
-                    setFile(selectedFile);
+                    setSelectedFile(selectedFile);
                   }}
                 />
 
                 {receiptUrl ? (
                   <p className="text-xs text-success">Receipt uploaded: {receiptUrl}</p>
-                ) : file ? (
+                ) : selectedFile ? (
                   <p className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <FileUp className="h-3.5 w-3.5" /> {file.name}
+                    <FileUp className="h-3.5 w-3.5" /> {selectedFile.name}
                   </p>
                 ) : (
                   <p className="text-xs text-muted-foreground">
@@ -214,25 +218,25 @@ export default function UploadReceiptPage() {
                   </p>
                 )}
 
-                {flowError && <p className="text-xs text-destructive">{flowError}</p>}
+                {error && <p className="text-xs text-destructive">{error}</p>}
               </div>
 
               <div className="flex gap-2">
-                <Button variant="outline" className="w-full" onClick={() => navigate(-1)} disabled={uploadMutation.isPending || submitMutation.isPending}>
+                <Button variant="outline" className="w-full" onClick={() => navigate(-1)} disabled={isUploading || isSubmitting}>
                   Cancel
                 </Button>
                 <Button
                   variant="outline"
                   className="w-full"
-                  disabled={!canUpload || uploadMutation.isPending || submitMutation.isPending}
+                  disabled={!canUpload || isUploading || isSubmitting}
                   onClick={() => uploadMutation.mutate()}
                 >
-                  {uploadMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-                  {uploadMutation.isPending ? "Uploading..." : "Upload receipt"}
+                  {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                  {isUploading ? "Uploading..." : "Upload receipt"}
                 </Button>
-                <Button className="w-full" disabled={!canSubmit || submitMutation.isPending} onClick={() => submitMutation.mutate()}>
-                  {submitMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {submitMutation.isPending ? "Submitting..." : "Submit request"}
+                <Button className="w-full" disabled={!canSubmit || isSubmitting} onClick={() => submitMutation.mutate()}>
+                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {isSubmitting ? "Submitting..." : "Submit request"}
                 </Button>
               </div>
             </CardContent>
