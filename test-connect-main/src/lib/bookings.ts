@@ -116,6 +116,7 @@ export async function createBookingRequest(params: {
       student_test_selection_id: selection.id,
       start_date_time: datetimeStr,
       status,
+      receipt_url: receipt.receiptPath,
       receipt_path: receipt.receiptPath,
       receipt_mime: receipt.receiptMime,
       receipt_original_name: receipt.receiptOriginalName,
