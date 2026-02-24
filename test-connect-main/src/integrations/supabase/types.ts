@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       bookings: {
         Row: {
+          archived_by_teacher: boolean
           created_at: string
           id: string
           receipt_mime: string | null
@@ -29,6 +30,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          archived_by_teacher?: boolean
           created_at?: string
           id?: string
           receipt_mime?: string | null
@@ -42,6 +44,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          archived_by_teacher?: boolean
           created_at?: string
           id?: string
           receipt_mime?: string | null
