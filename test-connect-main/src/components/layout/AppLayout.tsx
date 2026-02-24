@@ -2,6 +2,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { GraduationCap, LogOut, MessageSquare, Calendar, LayoutDashboard, BookOpen, ClipboardList } from "lucide-react";
+import NotificationsBell from "@/components/NotificationsBell";
 
 const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { profile, signOut } = useAuth();
@@ -56,6 +57,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           </nav>
 
           <div className="flex items-center gap-3">
+            <NotificationsBell />
             <span className="hidden sm:block text-sm text-muted-foreground">
               {profile?.name}
             </span>
