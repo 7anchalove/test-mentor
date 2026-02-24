@@ -92,8 +92,9 @@ export async function createBookingRequest(params: {
   receipt: UploadedReceipt;
 }) {
   const { studentId, teacherId, category, subtype, datetimeStr, receiptUrl, receipt } = params;
+  const normalizedReceiptUrl = receiptUrl?.trim();
 
-  if (!receiptUrl?.trim()) {
+  if (!normalizedReceiptUrl) {
     throw new Error("Receipt upload is required before submitting");
   }
 
@@ -115,23 +116,23 @@ export async function createBookingRequest(params: {
 
   if (selectionError) throw selectionError;
 
-  const bookingInsertPayload = {
+  const payload = {
     student_id: studentId,
     teacher_id: teacherId,
     student_test_selection_id: selection.id,
     start_date_time: datetimeStr,
     status,
-    receipt_url: receiptUrl,
+    receipt_url: normalizedReceiptUrl,
     receipt_path: receipt.receiptPath,
     receipt_mime: receipt.receiptMime,
     receipt_original_name: receipt.receiptOriginalName,
   };
 
-  console.log("BOOKING INSERT payload", bookingInsertPayload);
+  console.log("BOOKING INSERT payload", payload);
 
   const { data: booking, error: bookingError } = await supabase
     .from("bookings")
-    .insert(bookingInsertPayload as any)
+    .insert(payload as any)
     .select()
     .single();
 

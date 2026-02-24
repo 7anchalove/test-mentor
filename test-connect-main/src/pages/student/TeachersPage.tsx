@@ -69,7 +69,7 @@ const TeachersPage = () => {
 
   const canSubmitReceipt = useMemo(() => {
     if (!user || !selectedTeacherId || !datetimeStr || !category) return false;
-    return Boolean(receiptUrl && uploadedReceipt);
+    return Boolean(receiptUrl?.trim() && uploadedReceipt);
   }, [user, selectedTeacherId, datetimeStr, category, receiptUrl, uploadedReceipt]);
 
   const resetReceiptFlow = () => {
@@ -119,7 +119,10 @@ const TeachersPage = () => {
       if (!user) throw new Error("Not authenticated");
       if (!selectedTeacherId) throw new Error("Please select a teacher");
       if (!category || !datetimeStr) throw new Error("Missing test category or date/time");
-      if (!uploadedReceipt || !receiptUrl) throw new Error("Upload a receipt before submitting");
+      if (!uploadedReceipt || !receiptUrl?.trim()) {
+        setError("Upload a receipt before submitting");
+        throw new Error("Upload a receipt before submitting");
+      }
 
       const booking = await createBookingRequest({
         studentId: user.id,
@@ -127,7 +130,7 @@ const TeachersPage = () => {
         category,
         subtype,
         datetimeStr,
-        receiptUrl,
+        receiptUrl: receiptUrl.trim(),
         receipt: uploadedReceipt,
       });
 

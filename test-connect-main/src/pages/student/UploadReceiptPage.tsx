@@ -42,7 +42,7 @@ export default function UploadReceiptPage() {
 
   const canUpload = useMemo(() => validateReceiptFile(selectedFile) === null, [selectedFile]);
   const canSubmit = useMemo(() => {
-    return Boolean(user && teacherId && category && datetimeStr && receiptUrl && uploadedReceipt);
+    return Boolean(user && teacherId && category && datetimeStr && receiptUrl?.trim() && uploadedReceipt);
   }, [user, teacherId, category, datetimeStr, receiptUrl, uploadedReceipt]);
 
   const uploadMutation = useMutation({
@@ -82,7 +82,10 @@ export default function UploadReceiptPage() {
       if (!user) throw new Error("Not authenticated");
       if (!teacherId) throw new Error("Missing teacher reference");
       if (!category || !datetimeStr) throw new Error("Missing category or date/time");
-      if (!uploadedReceipt || !receiptUrl) throw new Error("Upload receipt before submitting");
+      if (!uploadedReceipt || !receiptUrl?.trim()) {
+        setError("Upload receipt before submitting");
+        throw new Error("Upload receipt before submitting");
+      }
 
       await createBookingRequest({
         studentId: user.id,
@@ -90,7 +93,7 @@ export default function UploadReceiptPage() {
         category,
         subtype,
         datetimeStr,
-        receiptUrl,
+        receiptUrl: receiptUrl.trim(),
         receipt: uploadedReceipt,
       });
 
@@ -222,7 +225,18 @@ export default function UploadReceiptPage() {
               </div>
 
               <div className="flex gap-2">
-                <Button variant="outline" className="w-full" onClick={() => navigate(-1)} disabled={isUploading || isSubmitting}>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => {
+                    setSelectedFile(null);
+                    setUploadedReceipt(null);
+                    setReceiptUrl(null);
+                    setError(null);
+                    navigate(-1);
+                  }}
+                  disabled={isUploading || isSubmitting}
+                >
                   Cancel
                 </Button>
                 <Button
