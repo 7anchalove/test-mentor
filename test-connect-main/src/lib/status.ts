@@ -8,7 +8,7 @@ export function getStatusTone(rawStatus: string | null | undefined): StatusTone 
   if (status === "completed") return "green";
   if (status === "scheduled") return "yellow";
   if (status === BOOKING_STATUS.PENDING_REVIEW || status === BOOKING_STATUS.PENDING || status === BOOKING_STATUS.AWAITING_RECEIPT) return "yellow";
-  if (status === BOOKING_STATUS.CONFIRMED) return "blue";
+  if (status === BOOKING_STATUS.CONFIRMED) return "green";
   if (status === BOOKING_STATUS.DECLINED || status === BOOKING_STATUS.CANCELLED) return "red";
 
   return "gray";

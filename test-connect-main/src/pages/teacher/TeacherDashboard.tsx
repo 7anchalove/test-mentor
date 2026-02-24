@@ -354,6 +354,21 @@ const TeacherDashboard = () => {
     setSearchParams(nextView === DEFAULT_DASHBOARD_VIEW ? {} : { view: nextView });
   };
 
+  const handleSummaryClick = (nextView: DashboardView) => {
+    handleChangeView(nextView);
+
+    const targetId =
+      nextView === "upcoming"
+        ? "dashboard-upcoming"
+        : nextView === "completed"
+          ? "dashboard-completed"
+          : "dashboard-root";
+
+    window.setTimeout(() => {
+      document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+  };
+
   return (
     <AppLayout>
       <div className="mx-auto max-w-5xl">
@@ -362,7 +377,7 @@ const TeacherDashboard = () => {
         <StatsCards
           activeView={view}
           stats={stats}
-          onChangeView={handleChangeView}
+          onChangeView={handleSummaryClick}
         />
 
         <DashboardView

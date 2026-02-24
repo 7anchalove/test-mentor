@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
-import { BookOpen, CalendarIcon, Clock, User } from "lucide-react";
+import { BookOpen, CalendarIcon, Clock, Sparkles, User } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -38,7 +38,10 @@ type DashboardViewProps = {
 };
 
 const SectionEmpty: React.FC<{ message: string }> = ({ message }) => (
-  <div className="rounded-xl border border-dashed py-10 text-center text-sm text-muted-foreground">{message}</div>
+  <div className="rounded-xl border border-dashed bg-muted/20 py-10 text-center text-sm text-muted-foreground">
+    <Sparkles className="mx-auto mb-2 h-5 w-5 opacity-50" />
+    {message}
+  </div>
 );
 
 const DashboardView: React.FC<DashboardViewProps> = ({
@@ -59,6 +62,34 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const upcomingRef = useRef<HTMLDivElement | null>(null);
   const completedRef = useRef<HTMLDivElement | null>(null);
+  const previousRequestIdsRef = useRef<Set<string>>(new Set());
+  const [highlightRequestIds, setHighlightRequestIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const currentIds = new Set(requests.map((request) => request.id));
+    const newIds = requests
+      .map((request) => request.id)
+      .filter((id) => !previousRequestIdsRef.current.has(id));
+
+    previousRequestIdsRef.current = currentIds;
+    if (!newIds.length) return;
+
+    setHighlightRequestIds((prev) => {
+      const next = new Set(prev);
+      newIds.forEach((id) => next.add(id));
+      return next;
+    });
+
+    const timeout = window.setTimeout(() => {
+      setHighlightRequestIds((prev) => {
+        const next = new Set(prev);
+        newIds.forEach((id) => next.delete(id));
+        return next;
+      });
+    }, 1800);
+
+    return () => window.clearTimeout(timeout);
+  }, [requests]);
 
   useEffect(() => {
     const target = view === "upcoming" ? upcomingRef.current : view === "completed" ? completedRef.current : rootRef.current;
@@ -83,7 +114,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
 
   if (allCount === 0) {
     return (
-      <div className="rounded-xl border border-dashed py-16 text-center text-muted-foreground">
+      <div id="dashboard-root" className="rounded-xl border border-dashed bg-muted/20 py-16 text-center text-muted-foreground">
         <BookOpen className="mx-auto mb-3 h-10 w-10 opacity-40" />
         <p>No bookings yet. Students will find you soon.</p>
       </div>
@@ -91,9 +122,9 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   }
 
   return (
-    <div ref={rootRef} className="space-y-8">
+    <div id="dashboard-root" ref={rootRef} className="space-y-9">
       {(view === "all" || view === "upcoming") && (
-        <div>
+        <div className="space-y-4">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-xl font-semibold font-display">Requests</h2>
             <Badge variant="outline">{requests.length}</Badge>
@@ -110,6 +141,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                   onReject={() => onRejectRequest(booking)}
                   isAccepting={requestLoading.acceptBookingId === booking.id}
                   isRejecting={requestLoading.rejectBookingId === booking.id}
+                  isNew={highlightRequestIds.has(booking.id)}
                 />
               ))}
             </div>
@@ -118,7 +150,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
       )}
 
       {(view === "all" || view === "upcoming") && (
-        <div ref={upcomingRef}>
+        <div id="dashboard-upcoming" ref={upcomingRef} className="space-y-4">
           <h2 className="mb-4 text-xl font-semibold font-display">Upcoming Sessions</h2>
           {upcoming.length === 0 ? (
             <SectionEmpty message="No upcoming bookings for the current filter." />
@@ -140,7 +172,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
       )}
 
       {(view === "all" || view === "completed") && (
-        <div ref={completedRef}>
+        <div id="dashboard-completed" ref={completedRef} className="space-y-4">
           <h2 className="mb-4 text-xl font-semibold font-display">Completed</h2>
           {completed.length === 0 ? (
             <SectionEmpty message="No completed bookings yet." />
@@ -162,7 +194,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
       )}
 
       {view === "all" && (
-        <div>
+        <div className="space-y-4">
           <h2 className="mb-4 text-xl font-semibold font-display">Past</h2>
           {past.length === 0 ? (
             <SectionEmpty message="No past bookings found." />
@@ -192,9 +224,10 @@ type RequestCardProps = {
   onReject: () => void;
   isAccepting: boolean;
   isRejecting: boolean;
+  isNew: boolean;
 };
 
-const RequestCard: React.FC<RequestCardProps> = ({ booking, onAccept, onReject, isAccepting, isRejecting }) => {
+const RequestCard: React.FC<RequestCardProps> = ({ booking, onAccept, onReject, isAccepting, isRejecting, isNew }) => {
   const [open, setOpen] = useState(false);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [loadingReceipt, setLoadingReceipt] = useState(false);
@@ -230,7 +263,7 @@ const RequestCard: React.FC<RequestCardProps> = ({ booking, onAccept, onReject, 
   }, [open, receiptPath]);
 
   return (
-    <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+    <Card className={`border-border/80 shadow-sm transition-all duration-500 hover:-translate-y-0.5 hover:shadow-md ${isNew ? "border-primary/40 bg-primary/5" : ""}`}>
       <CardContent className="flex items-center justify-between gap-4 p-5">
         <div className="flex items-start gap-4">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-muted">

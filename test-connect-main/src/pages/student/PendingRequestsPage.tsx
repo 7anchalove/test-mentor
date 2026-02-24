@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -17,7 +17,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, CalendarIcon, Clock, BookOpen, User, Loader2, Trash2 } from "lucide-react";
+import { ArrowLeft, CalendarIcon, Clock, BookOpen, User, Loader2, Trash2, Sparkles } from "lucide-react";
 import { format } from "date-fns";
 import AppLayout from "@/components/layout/AppLayout";
 import { useToast } from "@/hooks/use-toast";
@@ -31,34 +31,34 @@ function getStatusUi(status: string | null | undefined): { label: string; classN
   if (normalized === BOOKING_STATUS.AWAITING_RECEIPT || normalized === BOOKING_STATUS.PENDING_REVIEW || normalized === BOOKING_STATUS.PENDING) {
     return {
       label: "Pending",
-      className: "bg-amber-500 text-white border-transparent",
+      className: "border-amber-300 bg-amber-50 text-amber-700",
     };
   }
 
   if (normalized === BOOKING_STATUS.CONFIRMED) {
     return {
       label: "Confirmed",
-      className: "bg-success text-success-foreground border-transparent",
+      className: "border-emerald-300 bg-emerald-50 text-emerald-700",
     };
   }
 
   if (normalized === BOOKING_STATUS.DECLINED) {
     return {
       label: "Declined",
-      className: "bg-destructive text-destructive-foreground border-transparent",
+      className: "border-red-300 bg-red-50 text-red-700",
     };
   }
 
   if (normalized === BOOKING_STATUS.CANCELLED) {
     return {
       label: "Cancelled",
-      className: "bg-destructive text-destructive-foreground border-transparent",
+      className: "border-red-300 bg-red-50 text-red-700",
     };
   }
 
   return {
     label: "Pending",
-    className: "bg-amber-500 text-white border-transparent",
+    className: "border-amber-300 bg-amber-50 text-amber-700",
   };
 }
 
@@ -73,6 +73,8 @@ const PendingRequestsPage = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const handledBookingsRef = useRef<Set<string>>(new Set());
+  const previousRequestIdsRef = useRef<Set<string>>(new Set());
+  const [highlightRequestIds, setHighlightRequestIds] = useState<Set<string>>(new Set());
   const requestsQueryKey = ["student-requests", user?.id];
 
   const { data: requests, isLoading } = useQuery({
@@ -212,6 +214,33 @@ const PendingRequestsPage = () => {
   const oldRequests = (requests ?? []).filter((request) => canDeleteRequest(request.status));
 
   useEffect(() => {
+    const rows = requests ?? [];
+    const currentIds = new Set(rows.map((request) => request.id));
+    const newIds = rows
+      .map((request) => request.id)
+      .filter((id) => !previousRequestIdsRef.current.has(id));
+
+    previousRequestIdsRef.current = currentIds;
+    if (!newIds.length) return;
+
+    setHighlightRequestIds((prev) => {
+      const next = new Set(prev);
+      newIds.forEach((id) => next.add(id));
+      return next;
+    });
+
+    const timeout = window.setTimeout(() => {
+      setHighlightRequestIds((prev) => {
+        const next = new Set(prev);
+        newIds.forEach((id) => next.delete(id));
+        return next;
+      });
+    }, 1800);
+
+    return () => window.clearTimeout(timeout);
+  }, [requests]);
+
+  useEffect(() => {
     if (!user) return;
 
     const channel = supabase
@@ -317,14 +346,15 @@ const PendingRequestsPage = () => {
             ))}
           </div>
         ) : !requests?.length ? (
-          <div className="text-center py-16 text-muted-foreground">
-            <User className="mx-auto h-12 w-12 mb-4 opacity-30" />
-            <p>No requests yet.</p>
+          <div className="rounded-xl border border-dashed bg-muted/20 py-16 text-center text-muted-foreground">
+            <Sparkles className="mx-auto mb-4 h-10 w-10 opacity-40" />
+            <p className="font-medium">No requests yet.</p>
+            <p className="mt-1 text-sm">Your booking requests will appear here once submitted.</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {requests.map((req) => (
-              <Card key={req.id} className="transition-all hover:shadow-md">
+              <Card key={req.id} className={`border-border/80 shadow-sm transition-all duration-500 hover:-translate-y-0.5 hover:shadow-md ${highlightRequestIds.has(req.id) ? "border-primary/40 bg-primary/5" : ""}`}>
                 <CardContent className="flex items-center justify-between gap-4 p-5">
                   <div className="flex items-start gap-4">
                     <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-muted">

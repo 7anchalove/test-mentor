@@ -28,14 +28,14 @@ const StatsCards: React.FC<StatsCardsProps> = ({ activeView, stats, onChangeView
             key={item.key}
             type="button"
             onClick={() => onChangeView(item.key)}
-            className="text-left"
+            className="text-left transition-transform duration-200 hover:-translate-y-0.5"
             aria-pressed={isActive}
           >
             <Card
               className={cn(
-                "transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md",
+                "border-border/80 transition-all duration-200 hover:shadow-sm",
                 isActive
-                  ? "border-primary/60 bg-primary/5 ring-1 ring-primary/30"
+                  ? "border-primary/60 bg-primary/5 shadow-sm ring-1 ring-primary/30"
                   : "border-border/80 bg-card",
               )}
             >
