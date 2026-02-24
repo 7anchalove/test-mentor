@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, FileUp, Loader2, ShieldCheck } from "lucide-react";
+import { ArrowLeft, FileUp, Loader2, ShieldCheck, Upload } from "lucide-react";
 import { format } from "date-fns";
 import type { Database } from "@/integrations/supabase/types";
 import {
@@ -22,8 +22,6 @@ import {
 } from "@/lib/bookings";
 
 type TestCategory = Database["public"]["Enums"]["test_category"];
-
-type SubmitStage = "idle" | "uploading" | "creating";
 
 export default function UploadReceiptPage() {
   const navigate = useNavigate();
@@ -39,41 +37,60 @@ export default function UploadReceiptPage() {
 
   const [file, setFile] = useState<File | null>(null);
   const [uploadedReceipt, setUploadedReceipt] = useState<UploadedReceipt | null>(null);
-  const [submitStage, setSubmitStage] = useState<SubmitStage>("idle");
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+  const [flowError, setFlowError] = useState<string | null>(null);
 
+  const canUpload = useMemo(() => validateReceiptFile(file) === null, [file]);
   const canSubmit = useMemo(() => {
-    if (!user || !teacherId || !category || !datetimeStr) return false;
-    if (uploadedReceipt) return true;
-    return validateReceiptFile(file) === null;
-  }, [user, teacherId, category, datetimeStr, file, uploadedReceipt]);
+    return Boolean(user && teacherId && category && datetimeStr && receiptUrl && uploadedReceipt);
+  }, [user, teacherId, category, datetimeStr, receiptUrl, uploadedReceipt]);
 
-  const mutation = useMutation({
+  const uploadMutation = useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error("Not authenticated");
+      const validationError = validateReceiptFile(file);
+      if (validationError) throw new Error(validationError);
+
+      const uploaded = await uploadReceipt({
+        studentId: user.id,
+        file: file!,
+      });
+      return uploaded;
+    },
+    onSuccess: (uploaded) => {
+      setUploadedReceipt(uploaded);
+      setReceiptUrl(uploaded.receiptUrl);
+      setFlowError(null);
+      toast({
+        title: "Receipt uploaded",
+        description: "Receipt uploaded successfully. You can now submit your request.",
+      });
+    },
+    onError: (err: any) => {
+      const message = err?.message ?? "Receipt upload failed. Please try again.";
+      setFlowError(message);
+      toast({
+        title: "Upload failed",
+        description: message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const submitMutation = useMutation({
     mutationFn: async () => {
       if (!user) throw new Error("Not authenticated");
       if (!teacherId) throw new Error("Missing teacher reference");
       if (!category || !datetimeStr) throw new Error("Missing category or date/time");
+      if (!uploadedReceipt || !receiptUrl) throw new Error("Upload receipt before submitting");
 
-      let receipt = uploadedReceipt;
-      if (!receipt) {
-        const validationError = validateReceiptFile(file);
-        if (validationError) throw new Error(validationError);
-
-        setSubmitStage("uploading");
-        receipt = await uploadReceipt({
-          studentId: user.id,
-          file: file!,
-        });
-        setUploadedReceipt(receipt);
-      }
-
-      setSubmitStage("creating");
       await createBookingRequest({
         studentId: user.id,
         teacherId,
         category,
         subtype,
         datetimeStr,
-        receipt,
+        receipt: uploadedReceipt,
       });
 
       await sendRequestSubmittedEmail({
@@ -84,6 +101,7 @@ export default function UploadReceiptPage() {
       });
     },
     onSuccess: () => {
+      setFlowError(null);
       toast({
         title: "Request submitted",
         description: "Your receipt was uploaded and your booking request is now pending.",
@@ -93,16 +111,16 @@ export default function UploadReceiptPage() {
     },
     onError: (err: any) => {
       const isDuplicateBooking = isDuplicateActiveBookingError(err);
+      const message = isDuplicateBooking
+        ? "You already have a request at this time. Please choose another time."
+        : err?.message ?? "Please try again.";
+
+      setFlowError(message);
       toast({
         title: "Could not submit request",
-        description: isDuplicateBooking
-          ? "You already have a request at this time. Please choose another time."
-          : err?.message ?? "Please try again.",
+        description: message,
         variant: "destructive",
       });
-    },
-    onSettled: () => {
-      setSubmitStage("idle");
     },
   });
 
@@ -156,12 +174,15 @@ export default function UploadReceiptPage() {
                   id="receipt"
                   type="file"
                   accept="application/pdf,image/png,image/jpeg"
-                  disabled={mutation.isPending}
+                  disabled={uploadMutation.isPending || submitMutation.isPending}
                   onChange={(e) => {
                     const selectedFile = e.target.files?.[0] || null;
+                    setFlowError(null);
+                    setUploadedReceipt(null);
+                    setReceiptUrl(null);
+
                     if (!selectedFile) {
                       setFile(null);
-                      setUploadedReceipt(null);
                       return;
                     }
 
@@ -174,17 +195,15 @@ export default function UploadReceiptPage() {
                       });
                       e.target.value = "";
                       setFile(null);
-                      setUploadedReceipt(null);
                       return;
                     }
 
                     setFile(selectedFile);
-                    setUploadedReceipt(null);
                   }}
                 />
 
-                {uploadedReceipt ? (
-                  <p className="text-xs text-success">Receipt uploaded. You can retry submit without re-upload.</p>
+                {receiptUrl ? (
+                  <p className="text-xs text-success">Receipt uploaded: {receiptUrl}</p>
                 ) : file ? (
                   <p className="flex items-center gap-2 text-xs text-muted-foreground">
                     <FileUp className="h-3.5 w-3.5" /> {file.name}
@@ -194,19 +213,26 @@ export default function UploadReceiptPage() {
                     Receipt is mandatory. No booking request is created until you submit.
                   </p>
                 )}
+
+                {flowError && <p className="text-xs text-destructive">{flowError}</p>}
               </div>
 
               <div className="flex gap-2">
-                <Button variant="outline" className="w-full" onClick={() => navigate(-1)} disabled={mutation.isPending}>
+                <Button variant="outline" className="w-full" onClick={() => navigate(-1)} disabled={uploadMutation.isPending || submitMutation.isPending}>
                   Cancel
                 </Button>
-                <Button className="w-full" disabled={!canSubmit || mutation.isPending} onClick={() => mutation.mutate()}>
-                  {submitStage !== "idle" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {submitStage === "uploading"
-                    ? "Uploading..."
-                    : submitStage === "creating"
-                      ? "Creating request..."
-                      : "Upload & submit request"}
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  disabled={!canUpload || uploadMutation.isPending || submitMutation.isPending}
+                  onClick={() => uploadMutation.mutate()}
+                >
+                  {uploadMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                  {uploadMutation.isPending ? "Uploading..." : "Upload receipt"}
+                </Button>
+                <Button className="w-full" disabled={!canSubmit || submitMutation.isPending} onClick={() => submitMutation.mutate()}>
+                  {submitMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {submitMutation.isPending ? "Submitting..." : "Submit request"}
                 </Button>
               </div>
             </CardContent>

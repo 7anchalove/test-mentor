@@ -43,8 +43,6 @@ interface TeacherWithAvailability {
   computedCapacity: number;
 }
 
-type SubmitStage = "idle" | "uploading" | "creating";
-
 const TeachersPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -57,55 +55,79 @@ const TeachersPage = () => {
   const [selectedTeacherId, setSelectedTeacherId] = useState<string | null>(null);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [uploadedReceipt, setUploadedReceipt] = useState<UploadedReceipt | null>(null);
-  const [submitStage, setSubmitStage] = useState<SubmitStage>("idle");
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+  const [flowError, setFlowError] = useState<string | null>(null);
 
   const category = searchParams.get("category") as TestCategory;
   const subtype = searchParams.get("subtype") || null;
   const datetimeStr = searchParams.get("datetime") || "";
   const selectedDate = new Date(datetimeStr);
 
+  const canUploadReceipt = useMemo(() => {
+    return validateReceiptFile(receiptFile) === null;
+  }, [receiptFile]);
+
   const canSubmitReceipt = useMemo(() => {
     if (!user || !selectedTeacherId || !datetimeStr || !category) return false;
-    if (uploadedReceipt) return true;
-    return validateReceiptFile(receiptFile) === null;
-  }, [user, selectedTeacherId, datetimeStr, category, receiptFile, uploadedReceipt]);
+    return Boolean(receiptUrl && uploadedReceipt);
+  }, [user, selectedTeacherId, datetimeStr, category, receiptUrl, uploadedReceipt]);
 
   const resetReceiptFlow = () => {
     setReceiptDialogOpen(false);
     setReceiptFile(null);
     setSelectedTeacherId(null);
     setUploadedReceipt(null);
-    setSubmitStage("idle");
+    setReceiptUrl(null);
+    setFlowError(null);
     setBookingTeacherId(null);
   };
+
+  const uploadReceiptMutation = useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error("Not authenticated");
+      const validationError = validateReceiptFile(receiptFile);
+      if (validationError) throw new Error(validationError);
+
+      const uploaded = await uploadReceipt({
+        studentId: user.id,
+        file: receiptFile!,
+      });
+
+      return uploaded;
+    },
+    onSuccess: (uploaded) => {
+      setUploadedReceipt(uploaded);
+      setReceiptUrl(uploaded.receiptUrl);
+      setFlowError(null);
+      toast({
+        title: "Receipt uploaded",
+        description: "Receipt uploaded successfully. You can now submit your request.",
+      });
+    },
+    onError: (err: any) => {
+      setFlowError(err?.message ?? "Receipt upload failed. Please try again.");
+      toast({
+        title: "Upload failed",
+        description: err?.message ?? "Receipt upload failed. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
 
   const sendRequestMutation = useMutation({
     mutationFn: async () => {
       if (!user) throw new Error("Not authenticated");
       if (!selectedTeacherId) throw new Error("Please select a teacher");
       if (!category || !datetimeStr) throw new Error("Missing test category or date/time");
+      if (!uploadedReceipt || !receiptUrl) throw new Error("Upload a receipt before submitting");
 
-      let receipt = uploadedReceipt;
-      if (!receipt) {
-        const validationError = validateReceiptFile(receiptFile);
-        if (validationError) throw new Error(validationError);
-
-        setSubmitStage("uploading");
-        receipt = await uploadReceipt({
-          studentId: user.id,
-          file: receiptFile!,
-        });
-        setUploadedReceipt(receipt);
-      }
-
-      setSubmitStage("creating");
       const booking = await createBookingRequest({
         studentId: user.id,
         teacherId: selectedTeacherId,
         category,
         subtype,
         datetimeStr,
-        receipt,
+        receipt: uploadedReceipt,
       });
 
       await sendRequestSubmittedEmail({
@@ -118,6 +140,7 @@ const TeachersPage = () => {
       return booking;
     },
     onSuccess: () => {
+      setFlowError(null);
       toast({
         title: "Request submitted",
         description: "Your receipt was uploaded and your request has been sent to the teacher.",
@@ -134,18 +157,20 @@ const TeachersPage = () => {
         err?.message?.toLowerCase?.().includes("capacity") ||
         err?.message?.toLowerCase?.().includes("slot is full");
 
+      const message = isDuplicateBooking
+        ? "You already have a request at this time. Please choose another time."
+        : isCapacityFull
+          ? "This time slot is full for this teacher. Please pick another time or teacher."
+          : err?.message ?? "Please try again.";
+
+      setFlowError(message);
       toast({
         title: "Could not submit request",
-        description: isDuplicateBooking
-          ? "You already have a request at this time. Please choose another time."
-          : isCapacityFull
-            ? "This time slot is full for this teacher. Please pick another time or teacher."
-            : err?.message ?? "Please try again.",
+        description: message,
         variant: "destructive",
       });
     },
     onSettled: () => {
-      setSubmitStage("idle");
       setBookingTeacherId(null);
     },
   });
@@ -228,7 +253,8 @@ const TeachersPage = () => {
     setSelectedTeacherId(teacherId);
     setReceiptFile(null);
     setUploadedReceipt(null);
-    setSubmitStage("idle");
+    setReceiptUrl(null);
+    setFlowError(null);
     setReceiptDialogOpen(true);
   };
 
@@ -327,7 +353,7 @@ const TeachersPage = () => {
             <DialogHeader>
               <DialogTitle>Upload receipt and confirm request</DialogTitle>
               <DialogDescription>
-                A booking request is created only after a successful receipt upload and confirmation.
+                Booking is inserted only after receipt upload succeeds.
               </DialogDescription>
             </DialogHeader>
 
@@ -349,12 +375,15 @@ const TeachersPage = () => {
                   id="receipt"
                   type="file"
                   accept="application/pdf,image/png,image/jpeg"
-                  disabled={submitStage === "uploading" || sendRequestMutation.isPending}
+                  disabled={uploadReceiptMutation.isPending || sendRequestMutation.isPending}
                   onChange={(e) => {
                     const file = e.target.files?.[0] || null;
+                    setFlowError(null);
+                    setUploadedReceipt(null);
+                    setReceiptUrl(null);
+
                     if (!file) {
                       setReceiptFile(null);
-                      setUploadedReceipt(null);
                       return;
                     }
 
@@ -367,42 +396,45 @@ const TeachersPage = () => {
                       });
                       e.target.value = "";
                       setReceiptFile(null);
-                      setUploadedReceipt(null);
                       return;
                     }
 
                     setReceiptFile(file);
-                    setUploadedReceipt(null);
                   }}
                 />
 
-                {uploadedReceipt ? (
+                {receiptUrl ? (
                   <p className="flex items-center gap-2 text-xs text-success">
-                    <ReceiptText className="h-3.5 w-3.5" /> Receipt uploaded. You can retry submit without re-upload.
+                    <ReceiptText className="h-3.5 w-3.5" /> Receipt uploaded: {receiptUrl}
                   </p>
                 ) : receiptFile ? (
                   <p className="text-xs text-muted-foreground">Selected: {receiptFile.name}</p>
                 ) : (
                   <p className="text-xs text-muted-foreground">Receipt is required before your request can be created.</p>
                 )}
+
+                {flowError && <p className="text-xs text-destructive">{flowError}</p>}
               </div>
             </div>
 
             <DialogFooter>
-              <Button variant="outline" onClick={resetReceiptFlow} disabled={sendRequestMutation.isPending}>
+              <Button variant="outline" onClick={resetReceiptFlow} disabled={uploadReceiptMutation.isPending || sendRequestMutation.isPending}>
                 Cancel
+              </Button>
+              <Button
+                variant="outline"
+                disabled={!canUploadReceipt || uploadReceiptMutation.isPending || sendRequestMutation.isPending}
+                onClick={() => uploadReceiptMutation.mutate()}
+              >
+                {uploadReceiptMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                {uploadReceiptMutation.isPending ? "Uploading..." : "Upload receipt"}
               </Button>
               <Button
                 disabled={!canSubmitReceipt || sendRequestMutation.isPending}
                 onClick={() => sendRequestMutation.mutate()}
               >
-                {submitStage === "uploading" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {submitStage === "creating" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {submitStage === "uploading"
-                  ? "Uploading receipt..."
-                  : submitStage === "creating"
-                    ? "Creating request..."
-                    : "Upload & submit request"}
+                {sendRequestMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {sendRequestMutation.isPending ? "Submitting..." : "Submit request"}
               </Button>
             </DialogFooter>
           </DialogContent>

@@ -46,6 +46,7 @@ export function validateReceiptFile(file: File | null) {
 }
 
 export type UploadedReceipt = {
+  receiptUrl: string;
   receiptPath: string;
   receiptMime: string;
   receiptOriginalName: string;
@@ -74,6 +75,7 @@ export async function uploadReceipt(params: {
   if (upErr) throw upErr;
 
   return {
+    receiptUrl: receiptPath,
     receiptPath,
     receiptMime: file.type,
     receiptOriginalName: file.name,
@@ -108,19 +110,23 @@ export async function createBookingRequest(params: {
 
   if (selectionError) throw selectionError;
 
+  const bookingInsertPayload = {
+    student_id: studentId,
+    teacher_id: teacherId,
+    student_test_selection_id: selection.id,
+    start_date_time: datetimeStr,
+    status,
+    receipt_url: receipt.receiptUrl,
+    receipt_path: receipt.receiptPath,
+    receipt_mime: receipt.receiptMime,
+    receipt_original_name: receipt.receiptOriginalName,
+  };
+
+  console.log("[createBookingRequest] booking insert payload", bookingInsertPayload);
+
   const { data: booking, error: bookingError } = await supabase
     .from("bookings")
-    .insert({
-      student_id: studentId,
-      teacher_id: teacherId,
-      student_test_selection_id: selection.id,
-      start_date_time: datetimeStr,
-      status,
-      receipt_url: receipt.receiptPath,
-      receipt_path: receipt.receiptPath,
-      receipt_mime: receipt.receiptMime,
-      receipt_original_name: receipt.receiptOriginalName,
-    } as any)
+    .insert(bookingInsertPayload as any)
     .select()
     .single();
 
