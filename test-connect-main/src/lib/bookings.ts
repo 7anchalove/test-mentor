@@ -45,53 +45,17 @@ export function validateReceiptFile(file: File | null) {
   return null;
 }
 
-export async function createAwaitingReceiptBooking(params: {
-  studentId: string;
-  teacherId: string;
-  category: TestCategory;
-  subtype: string | null;
-  datetimeStr: string;
-}) {
-  const { studentId, teacherId, category, subtype, datetimeStr } = params;
-  const status = assertBookingStatus(
-    BOOKING_STATUS.AWAITING_RECEIPT,
-    "createAwaitingReceiptBooking.insert(bookings)",
-  );
+export type UploadedReceipt = {
+  receiptPath: string;
+  receiptMime: string;
+  receiptOriginalName: string;
+};
 
-  const { data: selection, error: selErr } = await supabase
-    .from("student_test_selections")
-    .insert({
-      student_id: studentId,
-      test_category: category,
-      test_subtype: subtype,
-      test_date_time: datetimeStr,
-    })
-    .select()
-    .single();
-  if (selErr) throw selErr;
-
-  const { data: booking, error: bookErr } = await supabase
-    .from("bookings")
-    .insert({
-      student_id: studentId,
-      teacher_id: teacherId,
-      student_test_selection_id: selection.id,
-      start_date_time: datetimeStr,
-      status,
-    } as any)
-    .select()
-    .single();
-  if (bookErr) throw bookErr;
-
-  return booking;
-}
-
-export async function uploadReceiptAndAttachToBooking(params: {
-  bookingId: string;
+export async function uploadReceipt(params: {
   studentId: string;
   file: File;
-}) {
-  const { bookingId, studentId, file } = params;
+}): Promise<UploadedReceipt> {
+  const { studentId, file } = params;
 
   const validationError = validateReceiptFile(file);
   if (validationError) throw new Error(validationError);
@@ -109,45 +73,59 @@ export async function uploadReceiptAndAttachToBooking(params: {
     });
   if (upErr) throw upErr;
 
-  const receiptUrl = supabase.storage.from(BOOKING_RECEIPTS_BUCKET).getPublicUrl(receiptPath).data.publicUrl;
-
-  const { error: updateErr } = await supabase
-    .from("bookings")
-    .update({
-      receipt_url: receiptUrl,
-      receipt_path: receiptPath,
-      receipt_mime: file.type,
-      receipt_original_name: file.name,
-      receipt_uploaded_at: new Date().toISOString(),
-    } as any)
-    .eq("id", bookingId)
-    .eq("student_id", studentId);
-
-  if (updateErr) throw updateErr;
-
-  return { receiptPath };
+  return {
+    receiptPath,
+    receiptMime: file.type,
+    receiptOriginalName: file.name,
+  };
 }
 
-export async function submitBookingForReview(params: { bookingId: string; studentId: string }) {
-  const { bookingId, studentId } = params;
-  const nextStatus = assertBookingStatus(
-    BOOKING_STATUS.PENDING_REVIEW,
-    "submitBookingForReview.update(bookings)",
+export async function createBookingRequest(params: {
+  studentId: string;
+  teacherId: string;
+  category: TestCategory;
+  subtype: string | null;
+  datetimeStr: string;
+  receipt: UploadedReceipt;
+}) {
+  const { studentId, teacherId, category, subtype, datetimeStr, receipt } = params;
+
+  const status = assertBookingStatus(
+    BOOKING_STATUS.PENDING,
+    "createBookingRequest.insert(bookings)",
   );
 
-  const { data, error } = await supabase
-    .from("bookings")
-    .update({ status: nextStatus } as any)
-    .eq("id", bookingId)
-    .eq("student_id", studentId)
-    .eq("status", BOOKING_STATUS.AWAITING_RECEIPT)
+  const { data: selection, error: selectionError } = await supabase
+    .from("student_test_selections")
+    .insert({
+      student_id: studentId,
+      test_category: category,
+      test_subtype: subtype,
+      test_date_time: datetimeStr,
+    })
     .select("id")
-    .maybeSingle();
+    .single();
 
-  if (error) throw error;
-  if (!data) {
-    throw new Error("Booking is not ready for submission or was already submitted.");
-  }
+  if (selectionError) throw selectionError;
+
+  const { data: booking, error: bookingError } = await supabase
+    .from("bookings")
+    .insert({
+      student_id: studentId,
+      teacher_id: teacherId,
+      student_test_selection_id: selection.id,
+      start_date_time: datetimeStr,
+      status,
+      receipt_path: receipt.receiptPath,
+      receipt_mime: receipt.receiptMime,
+      receipt_original_name: receipt.receiptOriginalName,
+    } as any)
+    .select()
+    .single();
+
+  if (bookingError) throw bookingError;
+
+  return booking;
 }
 
 export async function sendRequestSubmittedEmail(params: {

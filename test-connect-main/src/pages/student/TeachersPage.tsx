@@ -16,17 +16,17 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, CheckCircle, XCircle, User } from "lucide-react";
+import { ArrowLeft, CheckCircle, Loader2, ReceiptText, Upload, User, XCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import AppLayout from "@/components/layout/AppLayout";
 import { format } from "date-fns";
 import type { Database } from "@/integrations/supabase/types";
 import {
-  createAwaitingReceiptBooking,
+  createBookingRequest,
   isDuplicateActiveBookingError,
   sendRequestSubmittedEmail,
-  submitBookingForReview,
-  uploadReceiptAndAttachToBooking,
+  type UploadedReceipt,
+  uploadReceipt,
   validateReceiptFile,
 } from "@/lib/bookings";
 
@@ -43,17 +43,21 @@ interface TeacherWithAvailability {
   computedCapacity: number;
 }
 
+type SubmitStage = "idle" | "uploading" | "creating";
+
 const TeachersPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
   const [bookingTeacherId, setBookingTeacherId] = useState<string | null>(null);
   const [receiptDialogOpen, setReceiptDialogOpen] = useState(false);
   const [selectedTeacherId, setSelectedTeacherId] = useState<string | null>(null);
-  const [activeBookingId, setActiveBookingId] = useState<string | null>(null);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [uploadedReceipt, setUploadedReceipt] = useState<UploadedReceipt | null>(null);
+  const [submitStage, setSubmitStage] = useState<SubmitStage>("idle");
 
   const category = searchParams.get("category") as TestCategory;
   const subtype = searchParams.get("subtype") || null;
@@ -61,71 +65,47 @@ const TeachersPage = () => {
   const selectedDate = new Date(datetimeStr);
 
   const canSubmitReceipt = useMemo(() => {
-    if (!user) return false;
-    if (!selectedTeacherId || !activeBookingId) return false;
-    if (validateReceiptFile(receiptFile) !== null) return false;
-    return true;
-  }, [user, selectedTeacherId, activeBookingId, receiptFile]);
+    if (!user || !selectedTeacherId || !datetimeStr || !category) return false;
+    if (uploadedReceipt) return true;
+    return validateReceiptFile(receiptFile) === null;
+  }, [user, selectedTeacherId, datetimeStr, category, receiptFile, uploadedReceipt]);
 
-  const startRequestMutation = useMutation({
-    mutationFn: async (teacherId: string) => {
-      if (!user) throw new Error("Not authenticated");
-      if (!category || !datetimeStr) throw new Error("Missing test category or date/time");
-
-      const booking = await createAwaitingReceiptBooking({
-        studentId: user.id,
-        teacherId,
-        category,
-        subtype,
-        datetimeStr,
-      });
-
-      return booking;
-    },
-    onSuccess: (booking, teacherId) => {
-      setSelectedTeacherId(teacherId);
-      setActiveBookingId(booking.id);
-      setReceiptFile(null);
-      setReceiptDialogOpen(true);
-    },
-    onError: (err: any) => {
-      const isDuplicateBooking = isDuplicateActiveBookingError(err);
-      const isCapacityFull =
-        err?.message?.includes("CAPACITY_FULL") ||
-        err?.message?.toLowerCase?.().includes("capacity") ||
-        err?.message?.toLowerCase?.().includes("slot is full");
-
-      toast({
-        title: "Could not start request",
-        description: isDuplicateBooking
-          ? "You already have a request at this time. Please choose another time."
-          : isCapacityFull
-            ? "This time slot is full for this teacher. Please pick another time or teacher."
-            : err?.message ?? "Please try again.",
-        variant: "destructive",
-      });
-    },
-    onSettled: () => {
-      setBookingTeacherId(null);
-    },
-  });
+  const resetReceiptFlow = () => {
+    setReceiptDialogOpen(false);
+    setReceiptFile(null);
+    setSelectedTeacherId(null);
+    setUploadedReceipt(null);
+    setSubmitStage("idle");
+    setBookingTeacherId(null);
+  };
 
   const sendRequestMutation = useMutation({
     mutationFn: async () => {
       if (!user) throw new Error("Not authenticated");
-      if (!activeBookingId) throw new Error("Booking draft is missing");
-      const validationError = validateReceiptFile(receiptFile);
-      if (validationError) throw new Error(validationError);
+      if (!selectedTeacherId) throw new Error("Please select a teacher");
+      if (!category || !datetimeStr) throw new Error("Missing test category or date/time");
 
-      await uploadReceiptAndAttachToBooking({
-        bookingId: activeBookingId,
-        studentId: user.id,
-        file: receiptFile!,
-      });
+      let receipt = uploadedReceipt;
+      if (!receipt) {
+        const validationError = validateReceiptFile(receiptFile);
+        if (validationError) throw new Error(validationError);
 
-      await submitBookingForReview({
-        bookingId: activeBookingId,
+        setSubmitStage("uploading");
+        receipt = await uploadReceipt({
+          studentId: user.id,
+          file: receiptFile!,
+        });
+        setUploadedReceipt(receipt);
+      }
+
+      setSubmitStage("creating");
+      const booking = await createBookingRequest({
         studentId: user.id,
+        teacherId: selectedTeacherId,
+        category,
+        subtype,
+        datetimeStr,
+        receipt,
       });
 
       await sendRequestSubmittedEmail({
@@ -135,18 +115,16 @@ const TeachersPage = () => {
         datetimeStr,
       });
 
-      return activeBookingId;
+      return booking;
     },
     onSuccess: () => {
       toast({
-        title: "Request sent successfully",
-        description: "Your receipt was uploaded and your request is now pending teacher review.",
+        title: "Request submitted",
+        description: "Your receipt was uploaded and your request has been sent to the teacher.",
       });
       queryClient.invalidateQueries({ queryKey: ["student-requests", user?.id] });
-      setReceiptDialogOpen(false);
-      setReceiptFile(null);
-      setSelectedTeacherId(null);
-      setActiveBookingId(null);
+      queryClient.invalidateQueries({ queryKey: ["teachers-availability", datetimeStr, category] });
+      resetReceiptFlow();
       navigate("/pending-requests", { replace: true });
     },
     onError: (err: any) => {
@@ -157,7 +135,7 @@ const TeachersPage = () => {
         err?.message?.toLowerCase?.().includes("slot is full");
 
       toast({
-        title: "Could not send request",
+        title: "Could not submit request",
         description: isDuplicateBooking
           ? "You already have a request at this time. Please choose another time."
           : isCapacityFull
@@ -165,6 +143,10 @@ const TeachersPage = () => {
             : err?.message ?? "Please try again.",
         variant: "destructive",
       });
+    },
+    onSettled: () => {
+      setSubmitStage("idle");
+      setBookingTeacherId(null);
     },
   });
 
@@ -243,8 +225,14 @@ const TeachersPage = () => {
     }
 
     setBookingTeacherId(teacherId);
-    startRequestMutation.mutate(teacherId);
+    setSelectedTeacherId(teacherId);
+    setReceiptFile(null);
+    setUploadedReceipt(null);
+    setSubmitStage("idle");
+    setReceiptDialogOpen(true);
   };
+
+  const selectedTeacher = teachers?.find((teacher) => teacher.userId === selectedTeacherId) ?? null;
 
   return (
     <AppLayout>
@@ -256,7 +244,7 @@ const TeachersPage = () => {
         <div className="mb-8">
           <h1 className="text-3xl font-bold font-display">Available Teachers</h1>
           <p className="mt-2 text-muted-foreground">
-            For {category.replace("_", " ")} {subtype ? `(${subtype})` : ""} on{" "}
+            For {category?.replace("_", " ") || "test"} {subtype ? `(${subtype})` : ""} on{" "}
             {format(selectedDate, "EEEE, MMMM d 'at' HH:mm")}
           </p>
         </div>
@@ -268,8 +256,8 @@ const TeachersPage = () => {
             ))}
           </div>
         ) : !teachers?.length ? (
-          <div className="text-center py-12 text-muted-foreground">
-            <User className="mx-auto h-12 w-12 mb-4 opacity-30" />
+          <div className="py-12 text-center text-muted-foreground">
+            <User className="mx-auto mb-4 h-12 w-12 opacity-30" />
             <p>No teachers found. Try a different date or time.</p>
           </div>
         ) : (
@@ -290,9 +278,9 @@ const TeachersPage = () => {
                         )}
                         {teacher.subjects?.length ? (
                           <div className="mt-1.5 flex flex-wrap gap-1">
-                            {teacher.subjects.map((s) => (
-                              <Badge key={s} variant="secondary" className="text-xs">
-                                {s}
+                            {teacher.subjects.map((subject) => (
+                              <Badge key={subject} variant="secondary" className="text-xs">
+                                {subject}
                               </Badge>
                             ))}
                           </div>
@@ -308,16 +296,14 @@ const TeachersPage = () => {
                           <><XCircle className="h-3 w-3" /> Not available</>
                         )}
                       </Badge>
-                      <span className="text-xs text-muted-foreground">
-                        Spots left: {teacher.spotsLeft}
-                      </span>
+                      <span className="text-xs text-muted-foreground">Spots left: {teacher.spotsLeft}</span>
                       {teacher.isAvailable && (
                         <Button
                           size="sm"
-                          disabled={bookingTeacherId !== null || startRequestMutation.isPending || sendRequestMutation.isPending}
+                          disabled={bookingTeacherId !== null || sendRequestMutation.isPending}
                           onClick={() => handleSelectTeacher(teacher.userId)}
                         >
-                          {bookingTeacherId === teacher.userId ? "Starting..." : "Select"}
+                          {bookingTeacherId === teacher.userId ? "Preparing..." : "Select"}
                         </Button>
                       )}
                     </div>
@@ -327,35 +313,33 @@ const TeachersPage = () => {
           </div>
         )}
 
-        {/* Receipt required dialog (student uploads before request is sent) */}
         <Dialog
           open={receiptDialogOpen}
           onOpenChange={(open) => {
-            setReceiptDialogOpen(open);
             if (!open) {
-              setReceiptFile(null);
-              setSelectedTeacherId(null);
-              setActiveBookingId(null);
+              resetReceiptFlow();
+              return;
             }
+            setReceiptDialogOpen(true);
           }}
         >
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Upload booking receipt (required)</DialogTitle>
+              <DialogTitle>Upload receipt and confirm request</DialogTitle>
               <DialogDescription>
-                Your request will only be sent after you upload a receipt (PDF / PNG / JPEG).
+                A booking request is created only after a successful receipt upload and confirmation.
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4">
               <div className="rounded-lg border bg-muted/40 p-3 text-sm">
                 <div className="font-medium">Request details</div>
-                <div className="text-muted-foreground mt-1">
+                <div className="mt-1 text-muted-foreground">
+                  Teacher: {selectedTeacher?.name ?? "Selected teacher"}
+                  <br />
                   {category ? category.replaceAll("_", " ") : ""}
                   {subtype ? ` (${subtype})` : ""}
-                  {datetimeStr ? (
-                    <> — {format(new Date(datetimeStr), "EEEE, MMMM d 'at' HH:mm")}</>
-                  ) : null}
+                  {datetimeStr ? <> — {format(new Date(datetimeStr), "EEEE, MMMM d 'at' HH:mm")}</> : null}
                 </div>
               </div>
 
@@ -365,13 +349,16 @@ const TeachersPage = () => {
                   id="receipt"
                   type="file"
                   accept="application/pdf,image/png,image/jpeg"
+                  disabled={submitStage === "uploading" || sendRequestMutation.isPending}
                   onChange={(e) => {
-                    const f = e.target.files?.[0] || null;
-                    if (!f) {
+                    const file = e.target.files?.[0] || null;
+                    if (!file) {
                       setReceiptFile(null);
+                      setUploadedReceipt(null);
                       return;
                     }
-                    const validationError = validateReceiptFile(f);
+
+                    const validationError = validateReceiptFile(file);
                     if (validationError) {
                       toast({
                         title: "Invalid receipt file",
@@ -380,38 +367,42 @@ const TeachersPage = () => {
                       });
                       e.target.value = "";
                       setReceiptFile(null);
+                      setUploadedReceipt(null);
                       return;
                     }
-                    setReceiptFile(f);
+
+                    setReceiptFile(file);
+                    setUploadedReceipt(null);
                   }}
                 />
-                {!receiptFile ? (
-                  <p className="text-xs text-muted-foreground">
-                    Receipt is required. You can’t send the request without it.
+
+                {uploadedReceipt ? (
+                  <p className="flex items-center gap-2 text-xs text-success">
+                    <ReceiptText className="h-3.5 w-3.5" /> Receipt uploaded. You can retry submit without re-upload.
                   </p>
-                ) : (
+                ) : receiptFile ? (
                   <p className="text-xs text-muted-foreground">Selected: {receiptFile.name}</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Receipt is required before your request can be created.</p>
                 )}
               </div>
             </div>
 
             <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setReceiptDialogOpen(false)}
-                disabled={sendRequestMutation.isPending}
-              >
+              <Button variant="outline" onClick={resetReceiptFlow} disabled={sendRequestMutation.isPending}>
                 Cancel
               </Button>
               <Button
-                onClick={() => {
-                  if (!selectedTeacherId) return;
-                  setBookingTeacherId(selectedTeacherId);
-                  sendRequestMutation.mutate();
-                }}
                 disabled={!canSubmitReceipt || sendRequestMutation.isPending}
+                onClick={() => sendRequestMutation.mutate()}
               >
-                {sendRequestMutation.isPending ? "Submitting..." : "Submit request"}
+                {submitStage === "uploading" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {submitStage === "creating" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {submitStage === "uploading"
+                  ? "Uploading receipt..."
+                  : submitStage === "creating"
+                    ? "Creating request..."
+                    : "Upload & submit request"}
               </Button>
             </DialogFooter>
           </DialogContent>

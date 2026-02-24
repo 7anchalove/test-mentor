@@ -17,7 +17,7 @@ export function parseDashboardView(value: string | null): DashboardView {
 }
 
 export function isRequestStatus(status: string | null | undefined) {
-  return status === BOOKING_STATUS.PENDING_REVIEW || status === BOOKING_STATUS.AWAITING_RECEIPT;
+  return status === BOOKING_STATUS.PENDING;
 }
 
 export function isUpcomingBooking(booking: DashboardBookingLike, now = new Date()) {

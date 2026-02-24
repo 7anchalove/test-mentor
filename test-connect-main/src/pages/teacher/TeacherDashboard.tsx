@@ -159,7 +159,7 @@ const TeacherDashboard = () => {
         .select("*")
         .eq("teacher_id", user.id)
         .eq("archived_by_teacher", false)
-        .in("status", [BOOKING_STATUS.PENDING_REVIEW, BOOKING_STATUS.AWAITING_RECEIPT] as any)
+        .eq("status", BOOKING_STATUS.PENDING)
         .order("start_date_time", { ascending: true });
 
       if (error) throw error;
