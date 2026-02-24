@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { getNotificationHref } from "@/lib/notificationHref";
 
 type NotificationItem = {
   id: string;
@@ -20,6 +21,11 @@ type NotificationItem = {
   action_url: string | null;
   is_read: boolean;
   created_at: string;
+  booking_id?: string | null;
+  type?: string | null;
+  kind?: string | null;
+  data?: Record<string, unknown> | null;
+  payload?: Record<string, unknown> | null;
 };
 
 const MAX_NOTIFICATIONS = 20;
@@ -46,7 +52,7 @@ const NotificationsBell = () => {
       setLoading(true);
       const { data, error } = await supabase
         .from("notifications")
-        .select("id, user_id, title, body, action_url, is_read, created_at")
+        .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
         .limit(MAX_NOTIFICATIONS);
@@ -173,9 +179,16 @@ const NotificationsBell = () => {
       await markAsRead(notification.id);
     }
 
-    if (notification.action_url) {
-      navigate(notification.action_url);
+    const href = getNotificationHref(notification);
+    if (!href) {
+      console.warn("[NotificationsBell] Notification has no navigable destination", {
+        id: notification.id,
+        action_url: notification.action_url,
+      });
+      return;
     }
+
+    navigate(href);
   };
 
   return (
