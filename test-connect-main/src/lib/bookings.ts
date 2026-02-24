@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
+import { BOOKING_STATUS, assertBookingStatus } from "@/lib/bookingStatus";
 
 type TestCategory = Database["public"]["Enums"]["test_category"];
 
@@ -52,6 +53,10 @@ export async function createAwaitingReceiptBooking(params: {
   datetimeStr: string;
 }) {
   const { studentId, teacherId, category, subtype, datetimeStr } = params;
+  const status = assertBookingStatus(
+    BOOKING_STATUS.AWAITING_RECEIPT,
+    "createAwaitingReceiptBooking.insert(bookings)",
+  );
 
   const { data: selection, error: selErr } = await supabase
     .from("student_test_selections")
@@ -72,7 +77,7 @@ export async function createAwaitingReceiptBooking(params: {
       teacher_id: teacherId,
       student_test_selection_id: selection.id,
       start_date_time: datetimeStr,
-      status: "awaiting_receipt",
+      status,
     } as any)
     .select()
     .single();
@@ -125,13 +130,17 @@ export async function uploadReceiptAndAttachToBooking(params: {
 
 export async function submitBookingForReview(params: { bookingId: string; studentId: string }) {
   const { bookingId, studentId } = params;
+  const nextStatus = assertBookingStatus(
+    BOOKING_STATUS.PENDING_REVIEW,
+    "submitBookingForReview.update(bookings)",
+  );
 
   const { data, error } = await supabase
     .from("bookings")
-    .update({ status: "pending_review" } as any)
+    .update({ status: nextStatus } as any)
     .eq("id", bookingId)
     .eq("student_id", studentId)
-    .eq("status", "awaiting_receipt")
+    .eq("status", BOOKING_STATUS.AWAITING_RECEIPT)
     .select("id")
     .maybeSingle();
 

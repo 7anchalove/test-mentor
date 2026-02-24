@@ -465,7 +465,7 @@ export type Database = {
     }
     Enums: {
       app_role: "student" | "teacher"
-      booking_status: "pending" | "confirmed" | "cancelled"
+      booking_status: "pending" | "confirmed" | "cancelled" | "awaiting_receipt" | "pending_review" | "declined"
       session_status: "scheduled" | "completed" | "cancelled"
       test_category: "ITA_L2" | "TOLC" | "CENTS" | "CLA"
     }
@@ -596,7 +596,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["student", "teacher"],
-      booking_status: ["pending", "confirmed", "cancelled"],
+      booking_status: ["pending", "confirmed", "cancelled", "awaiting_receipt", "pending_review", "declined"],
       test_category: ["ITA_L2", "TOLC", "CENTS", "CLA"],
     },
   },

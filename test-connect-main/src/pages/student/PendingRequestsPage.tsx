@@ -21,34 +21,35 @@ import { ArrowLeft, CalendarIcon, Clock, BookOpen, User, Loader2, Trash2 } from 
 import { format } from "date-fns";
 import AppLayout from "@/components/layout/AppLayout";
 import { useToast } from "@/hooks/use-toast";
+import { BOOKING_STATUS, type BookingStatus } from "@/lib/bookingStatus";
 
-type RequestStatus = "awaiting_receipt" | "pending_review" | "pending" | "confirmed" | "declined" | "cancelled";
+type RequestStatus = BookingStatus;
 
 function getStatusUi(status: string | null | undefined): { label: string; className: string } {
   const normalized = String(status ?? "").toLowerCase() as RequestStatus;
 
-  if (normalized === "awaiting_receipt" || normalized === "pending_review" || normalized === "pending") {
+  if (normalized === BOOKING_STATUS.AWAITING_RECEIPT || normalized === BOOKING_STATUS.PENDING_REVIEW || normalized === BOOKING_STATUS.PENDING) {
     return {
       label: "Pending",
       className: "bg-amber-500 text-white border-transparent",
     };
   }
 
-  if (normalized === "confirmed") {
+  if (normalized === BOOKING_STATUS.CONFIRMED) {
     return {
       label: "Confirmed",
       className: "bg-success text-success-foreground border-transparent",
     };
   }
 
-  if (normalized === "declined") {
+  if (normalized === BOOKING_STATUS.DECLINED) {
     return {
       label: "Declined",
       className: "bg-destructive text-destructive-foreground border-transparent",
     };
   }
 
-  if (normalized === "cancelled") {
+  if (normalized === BOOKING_STATUS.CANCELLED) {
     return {
       label: "Cancelled",
       className: "bg-destructive text-destructive-foreground border-transparent",
@@ -63,7 +64,7 @@ function getStatusUi(status: string | null | undefined): { label: string; classN
 
 function canDeleteRequest(status: string | null | undefined) {
   const normalized = String(status ?? "").toLowerCase();
-  return normalized === "declined" || normalized === "cancelled";
+  return normalized === BOOKING_STATUS.DECLINED || normalized === BOOKING_STATUS.CANCELLED;
 }
 
 const PendingRequestsPage = () => {
@@ -172,7 +173,7 @@ const PendingRequestsPage = () => {
         .from("bookings")
         .delete({ count: "exact" })
         .eq("student_id", user.id)
-        .in("status", ["declined", "cancelled"]);
+        .in("status", [BOOKING_STATUS.DECLINED, BOOKING_STATUS.CANCELLED]);
 
       if (error) throw error;
       return count ?? 0;
@@ -236,7 +237,7 @@ const PendingRequestsPage = () => {
           // Refresh requests list
           queryClient.invalidateQueries({ queryKey: ["student-requests", user.id] });
 
-          if (updated.status === "confirmed") {
+          if (updated.status === BOOKING_STATUS.CONFIRMED) {
             const { data: conversationId, error } = await supabase.rpc("ensure_conversation_for_booking", {
               p_booking_id: bookingId,
             });
@@ -247,7 +248,7 @@ const PendingRequestsPage = () => {
             navigate(`/chat/${conversationId}`);
           }
 
-          if (updated.status === "declined" || updated.status === "cancelled") {
+          if (updated.status === BOOKING_STATUS.DECLINED || updated.status === BOOKING_STATUS.CANCELLED) {
             toast({
               title: "Request declined",
               description: "The teacher declined your request. You can book another teacher/time.",

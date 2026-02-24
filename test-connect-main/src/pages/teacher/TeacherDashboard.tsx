@@ -12,6 +12,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import { useToast } from "@/hooks/use-toast";
 import { useEffect, useMemo, useState } from "react";
 import StatusBadge from "@/components/StatusBadge";
+import { BOOKING_STATUS, assertBookingStatus } from "@/lib/bookingStatus";
 
 const TeacherDashboard = () => {
   const { user } = useAuth();
@@ -35,7 +36,7 @@ const TeacherDashboard = () => {
         },
         (payload) => {
           const row = payload.new as any;
-          if (row?.status !== "pending_review") return;
+          if (row?.status !== BOOKING_STATUS.PENDING_REVIEW) return;
           toast({
             title: "New booking request",
             description: "Open Requests to review it.",
@@ -59,7 +60,7 @@ const TeacherDashboard = () => {
         .from("bookings")
         .select("*")
         .eq("teacher_id", user.id)
-        .neq("status", "cancelled")
+        .neq("status", BOOKING_STATUS.CANCELLED)
         .order("start_date_time", { ascending: true });
 
       if (error) throw error;
@@ -98,11 +99,11 @@ const TeacherDashboard = () => {
 
   const getStatus = (booking: any) => String(booking?.status ?? "");
   const pending =
-    bookings?.filter((b) => getStatus(b) === "pending_review") || [];
+    bookings?.filter((b) => getStatus(b) === BOOKING_STATUS.PENDING_REVIEW) || [];
   const nonPending =
     bookings?.filter((b) => {
       const status = getStatus(b);
-      return status !== "pending_review" && status !== "awaiting_receipt";
+      return status !== BOOKING_STATUS.PENDING_REVIEW && status !== BOOKING_STATUS.AWAITING_RECEIPT;
     }) || [];
   const upcoming = nonPending.filter((b) => new Date(b.start_date_time) >= new Date());
   const past = nonPending.filter((b) => new Date(b.start_date_time) < new Date());
@@ -139,9 +140,14 @@ const TeacherDashboard = () => {
 
       if (sessErr) throw sessErr;
 
+      const nextStatus = assertBookingStatus(
+        BOOKING_STATUS.CONFIRMED,
+        "TeacherDashboard.acceptMutation.update(bookings)",
+      );
+
       const { error: updateErr } = await supabase
         .from("bookings")
-        .update({ status: "confirmed" })
+        .update({ status: nextStatus })
         .eq("id", booking.id);
 
       if (updateErr) throw updateErr;
@@ -183,9 +189,14 @@ const TeacherDashboard = () => {
 
   const rejectMutation = useMutation({
     mutationFn: async (booking: any) => {
+      const nextStatus = assertBookingStatus(
+        BOOKING_STATUS.DECLINED,
+        "TeacherDashboard.rejectMutation.update(bookings)",
+      );
+
       const { error } = await supabase
         .from("bookings")
-        .update({ status: "declined" } as any)
+        .update({ status: nextStatus } as any)
         .eq("id", booking.id);
 
       if (error) throw error;
