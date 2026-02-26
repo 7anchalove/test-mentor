@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -74,14 +74,14 @@ const SessionsPage = () => {
 
       const base = supabase
         .from("sessions")
-        .select("*")
+        .select("*, bookings!inner(status)")
         .eq("status", CONFIRMED_SESSION_STATUS)
         .filter("is_archived", "eq", "false")
         .order("start_date_time", { ascending: true });
 
       const { data, error } =
         profile.role === "teacher"
-          ? await base.eq("teacher_id", user.id)
+          ? await base.eq("teacher_id", user.id).neq("bookings.status", "cancelled")
           : await base.eq("student_id", user.id);
 
       if (error) throw error;
@@ -117,6 +117,51 @@ const SessionsPage = () => {
     if (statusFilter === "all") return source;
     return source.filter((session) => String(session.status) === statusFilter);
   }, [scope, splitSessions, statusFilter]);
+
+  useEffect(() => {
+    if (!user || !profile?.role) return;
+
+    const userFilter = profile.role === "teacher"
+      ? `teacher_id=eq.${user.id}`
+      : `student_id=eq.${user.id}`;
+
+    const sessionsChannel = supabase
+      .channel(`sessions-page-sessions-${profile.role}-${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "sessions",
+          filter: userFilter,
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: sessionsQueryKey });
+        },
+      )
+      .subscribe();
+
+    const bookingsChannel = supabase
+      .channel(`sessions-page-bookings-${profile.role}-${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "bookings",
+          filter: userFilter,
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: sessionsQueryKey });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(sessionsChannel);
+      supabase.removeChannel(bookingsChannel);
+    };
+  }, [user, profile?.role, queryClient]);
 
   const updateMeetingLink = useMutation({
     mutationFn: async () => {
@@ -279,6 +324,9 @@ const SessionsPage = () => {
       toast({ title: "Booking cancelled" });
       setCancelDialogSessionId(null);
       setCancelReasonDraft("");
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: sessionsQueryKey });
     },
   });
 
