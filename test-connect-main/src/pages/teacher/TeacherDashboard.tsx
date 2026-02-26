@@ -21,7 +21,7 @@ import {
   isRequestStatus,
   isUpcomingBooking,
   parseDashboardView,
-  type DashboardView,
+  type DashboardView as DashboardViewType,
 } from "@/lib/teacherDashboard";
 
 type DashboardStats = {
@@ -350,11 +350,11 @@ const TeacherDashboard = () => {
     };
   }, [bookings]);
 
-  const handleChangeView = (nextView: DashboardView) => {
+  const handleChangeView = (nextView: DashboardViewType) => {
     setSearchParams(nextView === DEFAULT_DASHBOARD_VIEW ? {} : { view: nextView });
   };
 
-  const handleSummaryClick = (nextView: DashboardView) => {
+  const handleSummaryClick = (nextView: DashboardViewType) => {
     handleChangeView(nextView);
 
     const targetId =
@@ -371,33 +371,37 @@ const TeacherDashboard = () => {
 
   return (
     <AppLayout>
-      <div className="mx-auto max-w-5xl">
-        <DashboardHeader />
+      <div className="bg-muted/30">
+        <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+          <div className="space-y-8">
+            <DashboardHeader />
 
-        <StatsCards
-          activeView={view}
-          stats={stats}
-          onChangeView={handleSummaryClick}
-        />
+            <StatsCards
+              activeView={view}
+              stats={stats}
+              onChangeView={handleSummaryClick}
+            />
 
-        <DashboardView
-          view={view}
-          isLoading={isLoading}
-          requests={requests}
-          upcoming={upcoming}
-          completed={completed}
-          past={past}
-          allCount={stats.total}
-          onAcceptRequest={(booking) => acceptMutation.mutate(booking)}
-          onRejectRequest={(booking) => rejectMutation.mutate(booking)}
-          requestLoading={{
-            acceptBookingId: (acceptMutation.variables as DashboardBooking | undefined)?.id,
-            rejectBookingId: (rejectMutation.variables as DashboardBooking | undefined)?.id,
-          }}
-          onArchive={(booking) => archiveMutation.mutate(booking)}
-          archiveBookingId={(archiveMutation.variables as DashboardBooking | undefined)?.id}
-          onChat={(conversationId) => navigate(`/chat/${conversationId}`)}
-        />
+            <DashboardView
+              view={view}
+              isLoading={isLoading}
+              requests={requests}
+              upcoming={upcoming}
+              completed={completed}
+              past={past}
+              allCount={stats.total}
+              onAcceptRequest={(booking) => acceptMutation.mutate(booking)}
+              onRejectRequest={(booking) => rejectMutation.mutate(booking)}
+              requestLoading={{
+                acceptBookingId: (acceptMutation.variables as DashboardBooking | undefined)?.id,
+                rejectBookingId: (rejectMutation.variables as DashboardBooking | undefined)?.id,
+              }}
+              onArchive={(booking) => archiveMutation.mutate(booking)}
+              archiveBookingId={(archiveMutation.variables as DashboardBooking | undefined)?.id}
+              onChat={(conversationId) => navigate(`/chat/${conversationId}`)}
+            />
+          </div>
+        </div>
       </div>
     </AppLayout>
   );

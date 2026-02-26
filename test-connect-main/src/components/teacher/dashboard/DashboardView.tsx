@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
-import { BookOpen, CalendarIcon, Clock, Sparkles, User } from "lucide-react";
+import { BookOpen, CalendarIcon, Clock, Inbox, Sparkles, User } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -38,10 +38,30 @@ type DashboardViewProps = {
 };
 
 const SectionEmpty: React.FC<{ message: string }> = ({ message }) => (
-  <div className="rounded-xl border border-dashed bg-muted/20 py-10 text-center text-sm text-muted-foreground">
-    <Sparkles className="mx-auto mb-2 h-5 w-5 opacity-50" />
-    {message}
+  <div className="rounded-xl border border-dashed border-border/70 bg-muted/20 py-8 text-center text-sm text-muted-foreground">
+    <Inbox className="mx-auto mb-2 h-5 w-5 opacity-50" />
+    <p>{message}</p>
   </div>
+);
+
+const SectionCard: React.FC<{ title: string; count: number; children: React.ReactNode; id?: string; sectionRef?: React.RefObject<HTMLDivElement | null> }> = ({
+  title,
+  count,
+  children,
+  id,
+  sectionRef,
+}) => (
+  <Card id={id} ref={sectionRef} className="border-border/70 shadow-sm">
+    <CardContent className="space-y-4 p-4 sm:p-5">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
+        <Badge variant="secondary" className="rounded-full px-2.5 py-0.5 text-xs">
+          {count}
+        </Badge>
+      </div>
+      {children}
+    </CardContent>
+  </Card>
 );
 
 const DashboardView: React.FC<DashboardViewProps> = ({
@@ -106,7 +126,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
     return (
       <div className="space-y-4">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="h-24 animate-pulse rounded-xl bg-muted" />
+          <div key={i} className="h-28 animate-pulse rounded-xl bg-muted" />
         ))}
       </div>
     );
@@ -114,7 +134,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
 
   if (allCount === 0) {
     return (
-      <div id="dashboard-root" className="rounded-xl border border-dashed bg-muted/20 py-16 text-center text-muted-foreground">
+      <div id="dashboard-root" className="rounded-xl border border-dashed border-border/70 bg-muted/20 py-10 text-center text-muted-foreground">
         <BookOpen className="mx-auto mb-3 h-10 w-10 opacity-40" />
         <p>No bookings yet. Students will find you soon.</p>
       </div>
@@ -124,11 +144,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   return (
     <div id="dashboard-root" ref={rootRef} className="space-y-9">
       {(view === "all" || view === "upcoming") && (
-        <div className="space-y-4">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-semibold font-display">Requests</h2>
-            <Badge variant="outline">{requests.length}</Badge>
-          </div>
+        <SectionCard title="Requests" count={requests.length}>
           {requests.length === 0 ? (
             <SectionEmpty message="No pending requests right now." />
           ) : (
@@ -146,12 +162,11 @@ const DashboardView: React.FC<DashboardViewProps> = ({
               ))}
             </div>
           )}
-        </div>
+        </SectionCard>
       )}
 
       {(view === "all" || view === "upcoming") && (
-        <div id="dashboard-upcoming" ref={upcomingRef} className="space-y-4">
-          <h2 className="mb-4 text-xl font-semibold font-display">Upcoming Sessions</h2>
+        <SectionCard title="Upcoming Sessions" count={upcoming.length} id="dashboard-upcoming" sectionRef={upcomingRef}>
           {upcoming.length === 0 ? (
             <SectionEmpty message="No upcoming bookings for the current filter." />
           ) : (
@@ -168,12 +183,11 @@ const DashboardView: React.FC<DashboardViewProps> = ({
               ))}
             </div>
           )}
-        </div>
+        </SectionCard>
       )}
 
       {(view === "all" || view === "completed") && (
-        <div id="dashboard-completed" ref={completedRef} className="space-y-4">
-          <h2 className="mb-4 text-xl font-semibold font-display">Completed</h2>
+        <SectionCard title="Completed" count={completed.length} id="dashboard-completed" sectionRef={completedRef}>
           {completed.length === 0 ? (
             <SectionEmpty message="No completed bookings yet." />
           ) : (
@@ -190,12 +204,11 @@ const DashboardView: React.FC<DashboardViewProps> = ({
               ))}
             </div>
           )}
-        </div>
+        </SectionCard>
       )}
 
       {view === "all" && (
-        <div className="space-y-4">
-          <h2 className="mb-4 text-xl font-semibold font-display">Past</h2>
+        <SectionCard title="Past" count={past.length}>
           {past.length === 0 ? (
             <SectionEmpty message="No past bookings found." />
           ) : (
@@ -212,7 +225,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
               ))}
             </div>
           )}
-        </div>
+        </SectionCard>
       )}
     </div>
   );
@@ -263,14 +276,14 @@ const RequestCard: React.FC<RequestCardProps> = ({ booking, onAccept, onReject, 
   }, [open, receiptPath]);
 
   return (
-    <Card className={`border-border/80 shadow-sm transition-all duration-500 hover:-translate-y-0.5 hover:shadow-md ${isNew ? "border-primary/40 bg-primary/5" : ""}`}>
-      <CardContent className="flex items-center justify-between gap-4 p-5">
+    <Card className={`border-border/70 shadow-sm transition-all duration-500 hover:shadow-md ${isNew ? "border-primary/40 bg-primary/5" : ""}`}>
+      <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
         <div className="flex items-start gap-4">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-muted">
             <User className="h-5 w-5 text-muted-foreground" />
           </div>
           <div>
-            <h3 className="font-semibold font-display">{booking.student?.name || "Student"}</h3>
+            <h3 className="font-semibold tracking-tight">{booking.student?.name || "Student"}</h3>
             <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               {booking.selection && (
                 <span className="flex items-center gap-1">
@@ -291,10 +304,11 @@ const RequestCard: React.FC<RequestCardProps> = ({ booking, onAccept, onReject, 
           </div>
         </div>
 
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm" variant="outline" disabled={isAccepting || isRejecting}>Review</Button>
-          </DialogTrigger>
+        <div className="flex w-full justify-start sm:w-auto sm:justify-end">
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" variant="outline" disabled={isAccepting || isRejecting}>Review</Button>
+            </DialogTrigger>
           <DialogContent className="sm:max-w-2xl">
             <DialogHeader>
               <DialogTitle>Booking request</DialogTitle>
@@ -368,7 +382,8 @@ const RequestCard: React.FC<RequestCardProps> = ({ booking, onAccept, onReject, 
               </Button>
             </DialogFooter>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </CardContent>
     </Card>
   );
