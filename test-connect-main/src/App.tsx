@@ -47,6 +47,7 @@ const App = () => (
             <Route path="/teachers" element={<ProtectedRoute requiredRole="student"><TeachersPage /></ProtectedRoute>} />
             <Route path="/upload-receipt" element={<ProtectedRoute requiredRole="student"><UploadReceiptPage /></ProtectedRoute>} />
             <Route path="/pending-requests" element={<ProtectedRoute requiredRole="student"><PendingRequestsPage /></ProtectedRoute>} />
+            <Route path="/dashboard/requests" element={<ProtectedRoute requiredRole="student"><PendingRequestsPage /></ProtectedRoute>} />
 
             {/* Teacher routes */}
             <Route path="/dashboard" element={<ProtectedRoute requiredRole="teacher"><TeacherDashboard /></ProtectedRoute>} />

@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import { Bell } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +18,7 @@ type NotificationItem = {
   title: string;
   body: string | null;
   action_url: string | null;
+  url?: string | null;
   is_read: boolean;
   created_at: string;
   booking_id?: string | null;
@@ -28,21 +29,68 @@ type NotificationItem = {
 };
 
 const MAX_NOTIFICATIONS = 20;
-const BOOKING_DECISION_KEYWORDS = ["accepted", "confirmed", "declined", "cancelled"] as const;
+const BOOKING_RELATED_KEYWORDS = ["booking", "request"] as const;
+const BOOKING_DECISION_STATUSES = ["confirmed", "declined", "cancelled", "accepted"] as const;
 
-function isBookingDecisionNotification(notification: NotificationItem) {
-  const haystack = [
-    notification.kind,
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function getString(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0 ? value : null;
+}
+
+function getNotificationUrl(notification: NotificationItem): string | null {
+  return getString(notification.action_url) ?? getString(notification.url);
+}
+
+function isStudentBookingNotification(notification: NotificationItem) {
+  const data = asRecord(notification.data);
+  const payload = asRecord(notification.payload);
+
+  const typeText = [
     notification.type,
-    notification.title,
-    notification.body,
-    notification.action_url,
+    notification.kind,
+    getString(data?.type),
+    getString(data?.kind),
+    getString(payload?.type),
+    getString(payload?.kind),
   ]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
 
-  return BOOKING_DECISION_KEYWORDS.some((keyword) => haystack.includes(keyword));
+  const hasBookingType = BOOKING_RELATED_KEYWORDS.some((keyword) => typeText.includes(keyword));
+  const hasBookingId = Boolean(
+    getString(notification.booking_id) ||
+      getString(data?.booking_id) ||
+      getString(payload?.booking_id),
+  );
+
+  const statusText = [
+    getString(data?.status),
+    getString(payload?.status),
+    notification.title,
+    notification.body,
+    getNotificationUrl(notification),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  const hasDecisionStatus = BOOKING_DECISION_STATUSES.some((status) => statusText.includes(status));
+
+  return hasBookingType || hasBookingId || hasDecisionStatus;
+}
+
+function getNotificationDestination(notification: NotificationItem, role?: string | null) {
+  const normalizedRole = String(role ?? "").toLowerCase();
+  if (normalizedRole === "student" && isStudentBookingNotification(notification)) {
+    return "/dashboard/requests";
+  }
+
+  return getNotificationUrl(notification);
 }
 
 const NotificationsBell = () => {
@@ -190,19 +238,28 @@ const NotificationsBell = () => {
     setNotifications((prev) => prev.map((item) => ({ ...item, is_read: true })));
   };
 
-  const handleNotificationClick = async (notification: NotificationItem) => {
+  const handleNotificationClick = async (
+    event: MouseEvent<HTMLAnchorElement>,
+    notification: NotificationItem,
+    destination: string | null,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+
     if (!notification.id) return;
 
     await markAsRead(notification.id);
 
-    if (profile?.role === "student" && isBookingDecisionNotification(notification)) {
-      navigate("/dashboard/requests");
-      setOpen(false);
-      return;
-    }
+    console.log("[NotificationsBell] click destination", {
+      id: notification.id,
+      type: notification.type ?? notification.kind ?? null,
+      url: getNotificationUrl(notification),
+      destination,
+      role: profile?.role ?? null,
+    });
 
-    if (notification.action_url) {
-      navigate(notification.action_url);
+    if (destination) {
+      navigate(destination);
     }
 
     setOpen(false);
@@ -241,12 +298,15 @@ const NotificationsBell = () => {
           ) : notifications.length === 0 ? (
             <p className="px-2 py-6 text-center text-sm text-muted-foreground">No notifications yet.</p>
           ) : (
-            notifications.map((notification) => (
-              <button
+            notifications.map((notification) => {
+              const destination = getNotificationDestination(notification, profile?.role);
+
+              return (
+              <Link
                 key={notification.id}
-                type="button"
-                onClick={() => handleNotificationClick(notification)}
-                className="w-full rounded-md px-2 py-2 text-left transition-colors hover:bg-accent"
+                to={destination ?? "#"}
+                onClick={(event) => handleNotificationClick(event, notification, destination)}
+                className="block w-full rounded-md px-2 py-2 text-left transition-colors hover:bg-accent"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
@@ -263,8 +323,8 @@ const NotificationsBell = () => {
 
                   {!notification.is_read && <span className="mt-1 h-2 w-2 rounded-full bg-primary" aria-hidden />}
                 </div>
-              </button>
-            ))
+              </Link>
+            )})
           )}
         </div>
       </DropdownMenuContent>
