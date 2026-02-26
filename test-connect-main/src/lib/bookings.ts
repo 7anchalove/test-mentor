@@ -6,7 +6,7 @@ type TestCategory = Database["public"]["Enums"]["test_category"];
 
 export const BOOKING_RECEIPTS_BUCKET = "booking-receipts";
 export const MAX_RECEIPT_SIZE_BYTES = 10 * 1024 * 1024;
-export const ACCEPTED_RECEIPT_MIME = new Set([
+export const ALLOWED_RECEIPT_MIME = new Set([
   "application/pdf",
   "image/png",
   "image/jpeg",
@@ -36,7 +36,7 @@ function getExtFromFile(file: File) {
 
 export function validateReceiptFile(file: File | null) {
   if (!file) return "Receipt is required";
-  if (!ACCEPTED_RECEIPT_MIME.has(file.type)) {
+  if (!ALLOWED_RECEIPT_MIME.has(file.type)) {
     return "Only PDF, PNG, or JPEG files are allowed";
   }
   if (file.size > MAX_RECEIPT_SIZE_BYTES) {
@@ -140,6 +140,24 @@ export async function createBookingRequest(params: {
   if (bookingError) throw bookingError;
 
   return booking;
+}
+
+export async function cancelBooking(bookingId: string, reason?: string) {
+  const payload: Database["public"]["Tables"]["bookings"]["Update"] = {
+    status: BOOKING_STATUS.CANCELLED,
+  };
+
+  const normalizedReason = reason?.trim();
+  if (normalizedReason) {
+    payload.cancel_reason = normalizedReason;
+  }
+
+  const { error } = await supabase
+    .from("bookings")
+    .update(payload)
+    .eq("id", bookingId);
+
+  if (error) throw error;
 }
 
 export async function sendRequestSubmittedEmail(params: {

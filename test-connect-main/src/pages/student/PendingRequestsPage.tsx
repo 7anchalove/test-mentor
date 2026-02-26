@@ -6,6 +6,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,6 +24,7 @@ import { format } from "date-fns";
 import AppLayout from "@/components/layout/AppLayout";
 import { useToast } from "@/hooks/use-toast";
 import { BOOKING_STATUS, type BookingStatus } from "@/lib/bookingStatus";
+import { cancelBooking } from "@/lib/bookings";
 
 type RequestStatus = BookingStatus;
 
@@ -67,6 +70,11 @@ function canDeleteRequest(status: string | null | undefined) {
   return normalized === BOOKING_STATUS.DECLINED || normalized === BOOKING_STATUS.CANCELLED;
 }
 
+function canCancelRequest(status: string | null | undefined) {
+  const normalized = String(status ?? "").toLowerCase();
+  return normalized === BOOKING_STATUS.PENDING || normalized === BOOKING_STATUS.CONFIRMED;
+}
+
 const PendingRequestsPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -75,9 +83,11 @@ const PendingRequestsPage = () => {
   const handledBookingsRef = useRef<Set<string>>(new Set());
   const previousRequestIdsRef = useRef<Set<string>>(new Set());
   const [highlightRequestIds, setHighlightRequestIds] = useState<Set<string>>(new Set());
+  const [cancelDialogRequestId, setCancelDialogRequestId] = useState<string | null>(null);
+  const [cancelReasonDraft, setCancelReasonDraft] = useState("");
   const requestsQueryKey = ["student-requests", user?.id];
 
-  const { data: requests, isLoading } = useQuery({
+  const { data: requests, isLoading, error: requestsError } = useQuery<any[]>({
     queryKey: requestsQueryKey,
     queryFn: async () => {
       if (!user) return [];
@@ -120,14 +130,18 @@ const PendingRequestsPage = () => {
       }));
     },
     enabled: !!user,
-    onError: (err: any) => {
-      toast({
-        title: "Could not load pending requests",
-        description: err?.message ?? "Please try again.",
-        variant: "destructive",
-      });
-    },
   });
+
+  useEffect(() => {
+    if (!requestsError) return;
+
+    const err = requestsError as any;
+    toast({
+      title: "Could not load pending requests",
+      description: err?.message ?? "Please try again.",
+      variant: "destructive",
+    });
+  }, [requestsError, toast]);
 
   const deleteOneMutation = useMutation({
     mutationFn: async (bookingId: string) => {
@@ -211,6 +225,51 @@ const PendingRequestsPage = () => {
     },
   });
 
+  const cancelMutation = useMutation({
+    mutationFn: async ({ bookingId, reason }: { bookingId: string; reason?: string }) => {
+      await cancelBooking(bookingId, reason);
+      return { bookingId };
+    },
+    onMutate: async ({ bookingId, reason }) => {
+      await queryClient.cancelQueries({ queryKey: requestsQueryKey });
+      const previous = queryClient.getQueryData<any[]>(requestsQueryKey);
+      const normalizedReason = reason?.trim();
+
+      queryClient.setQueryData<any[]>(requestsQueryKey, (old = []) =>
+        old.map((request) =>
+          request.id === bookingId
+            ? {
+                ...request,
+                status: BOOKING_STATUS.CANCELLED,
+                cancel_reason: normalizedReason || request.cancel_reason,
+              }
+            : request,
+        ),
+      );
+
+      return { previous };
+    },
+    onError: (err: any, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(requestsQueryKey, context.previous);
+      }
+
+      toast({
+        title: "Could not cancel booking",
+        description: err?.message ?? "Please try again.",
+        variant: "destructive",
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "Booking cancelled" });
+      setCancelDialogRequestId(null);
+      setCancelReasonDraft("");
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: requestsQueryKey });
+    },
+  });
+
   const oldRequests = (requests ?? []).filter((request) => canDeleteRequest(request.status));
 
   useEffect(() => {
@@ -273,7 +332,7 @@ const PendingRequestsPage = () => {
 
             if (error || !conversationId) return;
 
-            toast({ title: "Teacher accepted — chat is now available" });
+            toast({ title: "Teacher confirmed — chat is now available" });
             navigate(`/chat/${conversationId}`);
           }
 
@@ -394,6 +453,68 @@ const PendingRequestsPage = () => {
                     <Badge variant="secondary" className={`uppercase ${getStatusUi(req.status).className}`}>
                       {getStatusUi(req.status).label}
                     </Badge>
+
+                    {canCancelRequest(req.status) && (
+                      <Dialog
+                        open={cancelDialogRequestId === req.id}
+                        onOpenChange={(open) => {
+                          if (open) {
+                            setCancelDialogRequestId(req.id);
+                            setCancelReasonDraft("");
+                          } else if (!cancelMutation.isPending) {
+                            setCancelDialogRequestId(null);
+                            setCancelReasonDraft("");
+                          }
+                        }}
+                      >
+                        <DialogTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={cancelMutation.isPending || deleteAllOldMutation.isPending}
+                          >
+                            Cancel booking
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Cancel this session?</DialogTitle>
+                            <DialogDescription>
+                              You can request another teacher after cancelling.
+                            </DialogDescription>
+                          </DialogHeader>
+                          <Textarea
+                            placeholder="Optional reason"
+                            value={cancelReasonDraft}
+                            onChange={(e) => setCancelReasonDraft(e.target.value)}
+                            disabled={cancelMutation.isPending}
+                          />
+                          <DialogFooter>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => {
+                                if (!cancelMutation.isPending) {
+                                  setCancelDialogRequestId(null);
+                                  setCancelReasonDraft("");
+                                }
+                              }}
+                              disabled={cancelMutation.isPending}
+                            >
+                              Keep booking
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              onClick={() => cancelMutation.mutate({ bookingId: req.id, reason: cancelReasonDraft })}
+                              disabled={cancelMutation.isPending}
+                            >
+                              {cancelMutation.isPending && cancelMutation.variables?.bookingId === req.id ? "Cancelling..." : "Cancel booking"}
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    )}
 
                     {canDeleteRequest(req.status) && (
                       <AlertDialog>

@@ -214,7 +214,7 @@ const TeacherDashboard = () => {
       try {
         await supabase.functions.invoke("booking-notify", {
           body: {
-            kind: "request_accepted",
+            kind: "request_confirmed",
             to: booking.student?.email,
             payload: {
               test_category: booking.selection?.test_category,
@@ -227,7 +227,7 @@ const TeacherDashboard = () => {
       }
     },
     onSuccess: () => {
-      toast({ title: "Request accepted", description: "Booking confirmed and session created." });
+      toast({ title: "Request confirmed", description: "Booking confirmed and session created." });
       queryClient.invalidateQueries({ queryKey: ["teacher-dashboard-bookings", user?.id] });
       queryClient.invalidateQueries({ queryKey: ["teacher-dashboard-requests", user?.id] });
       queryClient.invalidateQueries({ queryKey: ["teacher-dashboard-stats", user?.id] });

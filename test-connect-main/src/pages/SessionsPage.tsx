@@ -8,6 +8,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,6 +28,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import StatusBadge from "@/components/StatusBadge";
 import { isValidAbsoluteHttpUrl, normalizeMeetingUrl } from "@/lib/meetingUrl";
+import { cancelBooking } from "@/lib/bookings";
 
 type SessionStatus = "scheduled" | "completed" | "cancelled" | "declined";
 
@@ -60,6 +62,8 @@ const SessionsPage = () => {
   const [meetingLinkDraft, setMeetingLinkDraft] = useState<string>("");
   const [scope, setScope] = useState<Scope>("upcoming");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [cancelDialogSessionId, setCancelDialogSessionId] = useState<string | null>(null);
+  const [cancelReasonDraft, setCancelReasonDraft] = useState("");
 
   const sessionsQueryKey = ["sessions", user?.id, profile?.role];
 
@@ -242,6 +246,42 @@ const SessionsPage = () => {
     },
   });
 
+  const cancelBookingMutation = useMutation({
+    mutationFn: async ({ bookingId, reason }: { bookingId: string; reason?: string }) => {
+      await cancelBooking(bookingId, reason);
+      return { bookingId };
+    },
+    onMutate: async ({ bookingId }) => {
+      await queryClient.cancelQueries({ queryKey: sessionsQueryKey });
+      const previous = queryClient.getQueryData<SessionRow[]>(sessionsQueryKey);
+
+      queryClient.setQueryData<SessionRow[]>(sessionsQueryKey, (old = []) =>
+        old.map((session) =>
+          session.booking_id === bookingId
+            ? { ...session, status: "cancelled" }
+            : session,
+        ),
+      );
+
+      return { previous };
+    },
+    onError: (err: any, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(sessionsQueryKey, context.previous);
+      }
+      toast({
+        title: "Could not cancel booking",
+        description: err?.message ?? "Please try again.",
+        variant: "destructive",
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "Booking cancelled" });
+      setCancelDialogSessionId(null);
+      setCancelReasonDraft("");
+    },
+  });
+
   const SessionCard = ({ session }: { session: SessionRow }) => {
     const otherName =
       profile?.role === "teacher"
@@ -251,7 +291,10 @@ const SessionsPage = () => {
     const start = new Date(session.start_date_time);
     const end = new Date(session.end_date_time);
     const normalizedMeetingLink = normalizeMeetingUrl(session.meeting_link ?? "");
-    const canJoinMeeting = normalizedMeetingLink && isValidAbsoluteHttpUrl(normalizedMeetingLink);
+    const canJoinMeeting =
+      session.status === CONFIRMED_SESSION_STATUS &&
+      normalizedMeetingLink &&
+      isValidAbsoluteHttpUrl(normalizedMeetingLink);
 
     return (
       <Card className="transition-all hover:shadow-md">
@@ -284,7 +327,9 @@ const SessionsPage = () => {
                   <LinkIcon className="h-4 w-4" /> Join meeting
                 </Button>
               ) : (
-                <p className="mt-3 text-sm text-destructive">Invalid meeting link</p>
+                <p className="mt-3 text-sm text-destructive">
+                  {session.status === "cancelled" ? "Session cancelled" : "Invalid meeting link"}
+                </p>
               )
             ) : (
               <p className="mt-3 text-sm text-muted-foreground">Meeting link not set yet.</p>
@@ -349,6 +394,69 @@ const SessionsPage = () => {
               >
                 <MessageSquare className="h-3.5 w-3.5" /> Chat
               </Button>
+            )}
+
+            {profile?.role === "student" && session.status === CONFIRMED_SESSION_STATUS && (
+              <Dialog
+                open={cancelDialogSessionId === session.id}
+                onOpenChange={(open) => {
+                  if (open) {
+                    setCancelDialogSessionId(session.id);
+                    setCancelReasonDraft("");
+                  } else if (!cancelBookingMutation.isPending) {
+                    setCancelDialogSessionId(null);
+                    setCancelReasonDraft("");
+                  }
+                }}
+              >
+                <DialogTrigger asChild>
+                  <Button size="sm" variant="outline" className="text-destructive hover:text-destructive">
+                    Cancel booking
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Cancel this session?</DialogTitle>
+                  </DialogHeader>
+                  <p className="text-sm text-muted-foreground">
+                    You can request another teacher after cancelling.
+                  </p>
+                  <Textarea
+                    placeholder="Optional reason"
+                    value={cancelReasonDraft}
+                    onChange={(event) => setCancelReasonDraft(event.target.value)}
+                    disabled={cancelBookingMutation.isPending}
+                  />
+                  <DialogFooter>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        if (!cancelBookingMutation.isPending) {
+                          setCancelDialogSessionId(null);
+                          setCancelReasonDraft("");
+                        }
+                      }}
+                      disabled={cancelBookingMutation.isPending}
+                    >
+                      Keep booking
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      onClick={() =>
+                        cancelBookingMutation.mutate({
+                          bookingId: session.booking_id,
+                          reason: cancelReasonDraft,
+                        })
+                      }
+                      disabled={cancelBookingMutation.isPending}
+                    >
+                      {cancelBookingMutation.isPending && cancelDialogSessionId === session.id ? "Cancelling..." : "Cancel booking"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             )}
 
             <AlertDialog>
@@ -424,7 +532,7 @@ const SessionsPage = () => {
         ) : !(sessions?.length ?? 0) ? (
           <div className="text-center py-16 text-muted-foreground">
             <p className="text-lg font-medium">No sessions yet</p>
-            <p className="mt-1 text-sm">Accepted requests will appear here.</p>
+            <p className="mt-1 text-sm">Confirmed requests will appear here.</p>
           </div>
         ) : (
           <div className="space-y-5">

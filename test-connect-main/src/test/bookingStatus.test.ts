@@ -13,15 +13,15 @@ describe("bookingStatus guards", () => {
   });
 
   it("returns false for invalid status values", () => {
-    expect(isBookingStatus("accepted")).toBe(false);
+    expect(isBookingStatus("approved")).toBe(false);
     expect(isBookingStatus("done")).toBe(false);
     expect(isBookingStatus(null)).toBe(false);
     expect(isBookingStatus(undefined)).toBe(false);
   });
 
   it("throws clear error for invalid values with callsite", () => {
-    expect(() => assertBookingStatus("accepted", "test.callsite")).toThrowError(
-      /Invalid value "accepted" at test\.callsite/,
+    expect(() => assertBookingStatus("approved", "test.callsite")).toThrowError(
+      /Invalid value "approved" at test\.callsite/,
     );
   });
 });
