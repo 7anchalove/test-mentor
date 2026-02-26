@@ -10,7 +10,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 type Payload = {
-  kind: "request_submitted" | "request_accepted" | "request_declined";
+  kind: "request_submitted" | "request_confirmed" | "request_declined";
   to: string;
   payload?: {
     test_category?: string;
@@ -23,8 +23,8 @@ function subjectFor(kind: Payload["kind"]) {
   switch (kind) {
     case "request_submitted":
       return "✅ Request submitted — Test Mentor";
-    case "request_accepted":
-      return "🎉 Request accepted — Test Mentor";
+    case "request_confirmed":
+      return "🎉 Request confirmed — Test Mentor";
     case "request_declined":
       return "❌ Request declined — Test Mentor";
   }
@@ -50,10 +50,10 @@ function htmlFor(input: Payload) {
     `;
   }
 
-  if (input.kind === "request_accepted") {
+  if (input.kind === "request_confirmed") {
     return `
       <div style="font-family: Arial, sans-serif; line-height: 1.5;">
-        <h2>Your request was accepted 🎉</h2>
+        <h2>Your request was confirmed 🎉</h2>
         ${details}
         <p>Your chat with the teacher is now available in Test Mentor.</p>
       </div>

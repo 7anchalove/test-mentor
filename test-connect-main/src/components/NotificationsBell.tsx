@@ -28,9 +28,25 @@ type NotificationItem = {
 };
 
 const MAX_NOTIFICATIONS = 20;
+const BOOKING_DECISION_KEYWORDS = ["accepted", "confirmed", "declined", "cancelled"] as const;
+
+function isBookingDecisionNotification(notification: NotificationItem) {
+  const haystack = [
+    notification.kind,
+    notification.type,
+    notification.title,
+    notification.body,
+    notification.action_url,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return BOOKING_DECISION_KEYWORDS.some((keyword) => haystack.includes(keyword));
+}
 
 const NotificationsBell = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -177,17 +193,12 @@ const NotificationsBell = () => {
   const handleNotificationClick = async (notification: NotificationItem) => {
     if (!notification.id) return;
 
-    if (!notification.is_read) {
-      const { error } = await supabase
-        .from("notifications")
-        .update({ is_read: true })
-        .eq("id", notification.id);
+    await markAsRead(notification.id);
 
-      if (!error) {
-        setNotifications((prev) =>
-          prev.map((item) => (item.id === notification.id ? { ...item, is_read: true } : item)),
-        );
-      }
+    if (profile?.role === "student" && isBookingDecisionNotification(notification)) {
+      navigate("/dashboard/requests");
+      setOpen(false);
+      return;
     }
 
     if (notification.action_url) {
