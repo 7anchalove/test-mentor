@@ -85,6 +85,7 @@ const PendingRequestsPage = () => {
   const [highlightRequestIds, setHighlightRequestIds] = useState<Set<string>>(new Set());
   const [cancelDialogRequestId, setCancelDialogRequestId] = useState<string | null>(null);
   const [cancelReasonDraft, setCancelReasonDraft] = useState("");
+  const [optimisticCancellingIds, setOptimisticCancellingIds] = useState<Set<string>>(new Set());
   const requestsQueryKey = ["student-requests", user?.id];
 
   const { data: requests, isLoading, error: requestsError } = useQuery<any[]>({
@@ -235,6 +236,14 @@ const PendingRequestsPage = () => {
       const previous = queryClient.getQueryData<any[]>(requestsQueryKey);
       const normalizedReason = reason?.trim();
 
+      setOptimisticCancellingIds((prev) => {
+        const next = new Set(prev);
+        next.add(bookingId);
+        return next;
+      });
+      setCancelDialogRequestId(null);
+      setCancelReasonDraft("");
+
       queryClient.setQueryData<any[]>(requestsQueryKey, (old = []) =>
         old.map((request) =>
           request.id === bookingId
@@ -249,9 +258,17 @@ const PendingRequestsPage = () => {
 
       return { previous };
     },
-    onError: (err: any, _vars, context) => {
+    onError: (err: any, vars, context) => {
       if (context?.previous) {
         queryClient.setQueryData(requestsQueryKey, context.previous);
+      }
+
+      if (vars?.bookingId) {
+        setOptimisticCancellingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(vars.bookingId);
+          return next;
+        });
       }
 
       toast({
@@ -262,10 +279,15 @@ const PendingRequestsPage = () => {
     },
     onSuccess: () => {
       toast({ title: "Booking cancelled" });
-      setCancelDialogRequestId(null);
-      setCancelReasonDraft("");
     },
-    onSettled: () => {
+    onSettled: (_data, _error, vars) => {
+      if (vars?.bookingId) {
+        setOptimisticCancellingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(vars.bookingId);
+          return next;
+        });
+      }
       queryClient.invalidateQueries({ queryKey: requestsQueryKey });
     },
   });
@@ -412,7 +434,10 @@ const PendingRequestsPage = () => {
           </div>
         ) : (
           <div className="space-y-4">
-            {requests.map((req) => (
+            {requests.map((req) => {
+              const isOptimisticallyCancelling = optimisticCancellingIds.has(req.id);
+
+              return (
               <Card key={req.id} className={`border-border/80 shadow-sm transition-all duration-500 hover:-translate-y-0.5 hover:shadow-md ${highlightRequestIds.has(req.id) ? "border-primary/40 bg-primary/5" : ""}`}>
                 <CardContent className="flex items-center justify-between gap-4 p-5">
                   <div className="flex items-start gap-4">
@@ -471,7 +496,7 @@ const PendingRequestsPage = () => {
                           <Button
                             size="sm"
                             variant="outline"
-                            disabled={cancelMutation.isPending || deleteAllOldMutation.isPending}
+                            disabled={isOptimisticallyCancelling || cancelMutation.isPending || deleteAllOldMutation.isPending}
                           >
                             Cancel booking
                           </Button>
@@ -487,19 +512,19 @@ const PendingRequestsPage = () => {
                             placeholder="Optional reason"
                             value={cancelReasonDraft}
                             onChange={(e) => setCancelReasonDraft(e.target.value)}
-                            disabled={cancelMutation.isPending}
+                            disabled={isOptimisticallyCancelling || cancelMutation.isPending}
                           />
                           <DialogFooter>
                             <Button
                               type="button"
                               variant="outline"
                               onClick={() => {
-                                if (!cancelMutation.isPending) {
+                                if (!isOptimisticallyCancelling && !cancelMutation.isPending) {
                                   setCancelDialogRequestId(null);
                                   setCancelReasonDraft("");
                                 }
                               }}
-                              disabled={cancelMutation.isPending}
+                              disabled={isOptimisticallyCancelling || cancelMutation.isPending}
                             >
                               Keep booking
                             </Button>
@@ -507,9 +532,9 @@ const PendingRequestsPage = () => {
                               type="button"
                               variant="destructive"
                               onClick={() => cancelMutation.mutate({ bookingId: req.id, reason: cancelReasonDraft })}
-                              disabled={cancelMutation.isPending}
+                              disabled={isOptimisticallyCancelling || cancelMutation.isPending}
                             >
-                              {cancelMutation.isPending && cancelMutation.variables?.bookingId === req.id ? "Cancelling..." : "Cancel booking"}
+                              {isOptimisticallyCancelling || (cancelMutation.isPending && cancelMutation.variables?.bookingId === req.id) ? "Cancelling..." : "Cancel booking"}
                             </Button>
                           </DialogFooter>
                         </DialogContent>
@@ -523,7 +548,7 @@ const PendingRequestsPage = () => {
                             size="sm"
                             variant="ghost"
                             className="gap-1 text-destructive hover:text-destructive"
-                            disabled={deleteOneMutation.isPending || deleteAllOldMutation.isPending}
+                            disabled={isOptimisticallyCancelling || deleteOneMutation.isPending || deleteAllOldMutation.isPending}
                           >
                             {deleteOneMutation.isPending && deleteOneMutation.variables === req.id ? (
                               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -555,7 +580,7 @@ const PendingRequestsPage = () => {
                   </div>
                 </CardContent>
               </Card>
-            ))}
+            )})}
           </div>
         )}
       </div>
