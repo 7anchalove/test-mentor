@@ -1,7 +1,7 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { LogOut, MessageSquare, Calendar, LayoutDashboard, BookOpen, ClipboardList } from "lucide-react";
+import { GraduationCap, LogOut, MessageSquare, Calendar, LayoutDashboard, BookOpen, ClipboardList } from "lucide-react";
 import NotificationsBell from "@/components/NotificationsBell";
 
 const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -35,11 +35,9 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       <header className="sticky top-0 z-50 border-b border-border bg-card/80 backdrop-blur-lg">
         <div className="container flex h-16 items-center justify-between">
           <Link to={profile?.role === "teacher" ? "/dashboard" : "/choose-test"} className="flex items-center gap-2">
-            <img
-              src="/brand/logo.png"
-              alt="Test Mentor"
-              className="h-9 w-9 rounded-lg object-contain"
-            />
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg gradient-hero">
+              <GraduationCap className="h-5 w-5 text-primary-foreground" />
+            </div>
             <span className="text-lg font-bold font-display text-foreground">Test Mentor</span>
           </Link>
 

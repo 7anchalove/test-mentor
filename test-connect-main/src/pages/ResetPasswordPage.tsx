@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { GraduationCap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const ResetPasswordPage = () => {
@@ -160,7 +161,9 @@ const ResetPasswordPage = () => {
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
-          <img src="/brand/logo.png" alt="Test Mentor" className="mx-auto mb-4 h-14 w-14 rounded-2xl object-contain" />
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl gradient-hero">
+            <GraduationCap className="h-7 w-7 text-primary-foreground" />
+          </div>
           <h1 className="text-3xl font-bold font-display text-foreground">Reset Password</h1>
           <p className="mt-2 text-muted-foreground">Choose a new secure password.</p>
         </div>
