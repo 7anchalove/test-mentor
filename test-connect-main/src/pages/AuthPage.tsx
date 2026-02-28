@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { GraduationCap, User, BookOpen } from "lucide-react";
+import { GraduationCap, User, BookOpen, KeyRound } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { FormError } from "@/components/ui/form-error";
 import { PasswordRequirements } from "@/components/ui/password-requirements";
@@ -41,6 +41,7 @@ const AuthPage = () => {
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
   const [signupRole, setSignupRole] = useState<AppRole>("student");
+  const [signupTeacherKey, setSignupTeacherKey] = useState("");
   const [signupError, setSignupError] = useState<string | null>(null);
 
   if (user && profile) {
@@ -73,6 +74,16 @@ const AuthPage = () => {
     if (!result.success) {
       setSignupError(result.error.errors[0].message);
       return;
+    }
+    if (signupRole === "teacher") {
+      if (!signupTeacherKey.trim()) {
+        setSignupError("Teacher access key is required.");
+        return;
+      }
+      if (signupTeacherKey.trim() !== "52552") {
+        setSignupError("The teacher access key is incorrect. Please contact the platform administrator.");
+        return;
+      }
     }
     setLoading(true);
     const { error } = await signUp(signupEmail, signupPassword, signupName, signupRole);
@@ -179,6 +190,25 @@ const AuthPage = () => {
                       </button>
                     </div>
                   </div>
+
+                  {signupRole === "teacher" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-teacher-key">
+                        <span className="flex items-center gap-1.5">
+                          <KeyRound className="h-3.5 w-3.5" />
+                          Teacher Key
+                        </span>
+                      </Label>
+                      <Input
+                        id="signup-teacher-key"
+                        type="password"
+                        placeholder="Enter your teacher access key"
+                        value={signupTeacherKey}
+                        onChange={(e) => { setSignupTeacherKey(e.target.value); setSignupError(null); }}
+                        required
+                      />
+                    </div>
+                  )}
 
                   <Button type="submit" className="w-full" disabled={loading}>
                     {loading ? "Creating account..." : "Create Account"}
