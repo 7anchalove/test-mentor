@@ -5,8 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { GraduationCap } from "lucide-react";
+import { GraduationCap, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { FormError } from "@/components/ui/form-error";
+import { PasswordRequirements } from "@/components/ui/password-requirements";
 
 const ResetPasswordPage = () => {
   const navigate = useNavigate();
@@ -175,22 +177,39 @@ const ResetPasswordPage = () => {
           </CardHeader>
           <CardContent>
             {checkingSession ? (
-              <p className="text-sm text-muted-foreground">Validating reset link...</p>
+              <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                Validating your reset link…
+              </div>
             ) : invalidMessage ? (
               <div className="space-y-4">
-                <p className="text-sm text-destructive">{invalidMessage}</p>
-                {invalidCode ? (
-                  <p className="text-xs text-muted-foreground">Error code: {invalidCode}</p>
-                ) : null}
+                <div className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/10 p-4">
+                  <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-destructive">This link is no longer valid</p>
+                    <p className="text-sm text-muted-foreground">
+                      Reset links expire for your security. Please request a new one.
+                    </p>
+                    {invalidCode ? (
+                      <p className="text-xs text-muted-foreground/70">Reference: {invalidCode}</p>
+                    ) : null}
+                  </div>
+                </div>
                 <Link to="/auth/forgot-password">
                   <Button className="w-full">Request new reset link</Button>
                 </Link>
               </div>
             ) : success ? (
               <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">Changes made successfully</p>
+                <div className="flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-900 dark:bg-green-950/40">
+                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-green-600 dark:text-green-400" />
+                  <div>
+                    <p className="text-sm font-medium text-green-700 dark:text-green-400">Password updated successfully!</p>
+                    <p className="text-sm text-muted-foreground">You can now log in with your new password.</p>
+                  </div>
+                </div>
                 <Button className="w-full" onClick={handleBackToLogin} disabled={loading}>
-                  {loading ? "Returning..." : "Back to login"}
+                  {loading ? "Returning…" : "Back to login"}
                 </Button>
               </div>
             ) : (
@@ -205,6 +224,7 @@ const ResetPasswordPage = () => {
                     onChange={(e) => setPassword(e.target.value)}
                     required
                   />
+                  <PasswordRequirements password={password} minLength={8} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="confirm-password">Confirm new password</Label>
@@ -218,10 +238,10 @@ const ResetPasswordPage = () => {
                   />
                 </div>
 
-                {passwordError ? <p className="text-sm text-destructive">{passwordError}</p> : null}
+                <FormError message={passwordError} />
 
                 <Button type="submit" className="w-full" disabled={loading || Boolean(passwordError)}>
-                  {loading ? "Saving..." : "Save changes"}
+                  {loading ? "Saving…" : "Save changes"}
                 </Button>
               </form>
             )}
