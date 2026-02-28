@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { GraduationCap } from "lucide-react";
+import { GraduationCap, MailCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { FormError } from "@/components/ui/form-error";
 import { z } from "zod";
 
 const schema = z.object({
@@ -18,17 +19,15 @@ const ForgotPasswordPage = () => {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
 
     const parsed = schema.safeParse({ email });
     if (!parsed.success) {
-      toast({
-        title: "Validation Error",
-        description: parsed.error.errors[0].message,
-        variant: "destructive",
-      });
+      setFormError(parsed.error.errors[0].message);
       return;
     }
 
@@ -47,19 +46,11 @@ const ForgotPasswordPage = () => {
       const isRateLimited = message.includes("rate limit") || status === 429 || code === "429";
 
       if (isRateLimited) {
-        toast({
-          title: "Please try again later",
-          description: "Too many reset requests. Please wait a minute and try again.",
-          variant: "destructive",
-        });
+        setFormError("Too many reset requests. Please wait a minute and try again.");
         return;
       }
 
-      toast({
-        title: "Could not send reset email",
-        description: error.message,
-        variant: "destructive",
-      });
+      setFormError(error.message);
       return;
     }
 
@@ -89,15 +80,22 @@ const ForgotPasswordPage = () => {
           <CardContent>
             {sent ? (
               <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  If this email exists in our system, a password reset link has been sent.
-                </p>
+                <div className="flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-900 dark:bg-green-950/40">
+                  <MailCheck className="mt-0.5 h-5 w-5 shrink-0 text-green-600 dark:text-green-400" />
+                  <div>
+                    <p className="text-sm font-medium text-green-700 dark:text-green-400">Check your inbox</p>
+                    <p className="text-sm text-muted-foreground">
+                      If this email exists in our system, a password reset link has been sent.
+                    </p>
+                  </div>
+                </div>
                 <Link to="/auth">
                   <Button className="w-full">Back to Log In</Button>
                 </Link>
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
+                <FormError message={formError} />
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
                   <Input
@@ -105,7 +103,7 @@ const ForgotPasswordPage = () => {
                     type="email"
                     placeholder="you@example.com"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => { setEmail(e.target.value); setFormError(null); }}
                     required
                   />
                 </div>
