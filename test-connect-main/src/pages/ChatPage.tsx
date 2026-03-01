@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -13,7 +13,7 @@ import AppLayout from "@/components/layout/AppLayout";
 
 type ChatBookingInfo = {
   id: string;
-  test_category: string;
+  test_category: string | null;
   test_subtype: string | null;
   start_date_time: string;
   status: string;
@@ -23,11 +23,13 @@ type ChatBookingInfo = {
 
 const ChatPage = () => {
   const { conversationId } = useParams<{ conversationId: string }>();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [message, setMessage] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const showMarkerV2 = searchParams.get("marker") === "v2";
 
   // Fetch conversation with booking details
   const { data: conversation } = useQuery({
@@ -86,12 +88,10 @@ const ChatPage = () => {
         | null;
       const selection = Array.isArray(rawSelection) ? rawSelection[0] : rawSelection;
 
-      if (!selection?.test_category) return null;
-
       return {
         id: booking.id,
-        test_category: selection.test_category,
-        test_subtype: selection.test_subtype,
+        test_category: selection?.test_category ?? null,
+        test_subtype: selection?.test_subtype ?? null,
         start_date_time: booking.start_date_time,
         status: booking.status,
         student_id: booking.student_id,
@@ -170,10 +170,28 @@ const ChatPage = () => {
 
   const canSeeBookingInfo =
     !!bookingInfo && !!user?.id && (user.id === bookingInfo.student_id || user.id === bookingInfo.teacher_id);
+  const bookingCategoryLabel = bookingInfo?.test_category
+    ? bookingInfo.test_category.replace("_", " ")
+    : "Test";
+
+  useEffect(() => {
+    if (!import.meta.env.PROD) return;
+    console.log("[ChatPage MARKER v2] mounted", {
+      conversationId,
+      marker: showMarkerV2,
+      hasBooking: Boolean(bookingInfo),
+    });
+  }, [conversationId, showMarkerV2, bookingInfo]);
 
   return (
     <AppLayout>
       <div className="mx-auto flex h-[calc(100vh-10rem)] max-w-3xl flex-col">
+        {showMarkerV2 && (
+          <div className="mb-2 rounded border border-primary/40 bg-primary/10 px-3 py-2 text-xs font-semibold text-primary">
+            MARKER v2
+          </div>
+        )}
+
         {/* Header */}
         <div className="mb-4 flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => navigate("/conversations")}>
@@ -192,7 +210,7 @@ const ChatPage = () => {
               <div className="flex items-center gap-2">
                 <BookOpen className="h-4 w-4 text-primary" />
                 <span className="text-sm font-medium">
-                  {bookingInfo.test_category.replace("_", " ")}
+                  {bookingCategoryLabel}
                   {bookingInfo.test_subtype ? ` (${bookingInfo.test_subtype})` : ""}
                 </span>
               </div>
