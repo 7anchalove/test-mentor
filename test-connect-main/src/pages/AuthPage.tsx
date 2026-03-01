@@ -42,10 +42,7 @@ const AuthPage = () => {
   const [signupPassword, setSignupPassword] = useState("");
   const [signupRole, setSignupRole] = useState<AppRole>("student");
   const [signupTeacherKey, setSignupTeacherKey] = useState("");
-<<<<<<< HEAD
-=======
   const [signupError, setSignupError] = useState<string | null>(null);
->>>>>>> 63f2fe4f8b0bc9a0cd9a8ef3eddd002c7d9e96a1
 
   if (user && profile) {
     return <Navigate to={profile.role === "teacher" ? "/dashboard" : "/choose-test"} replace />;
@@ -78,29 +75,6 @@ const AuthPage = () => {
       setSignupError(result.error.errors[0].message);
       return;
     }
-<<<<<<< HEAD
-
-    if (signupRole === "teacher") {
-      if (!signupTeacherKey.trim()) {
-        toast({
-          title: "Validation Error",
-          description: "Teacher key is required.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      if (signupTeacherKey.trim() !== "52552") {
-        toast({
-          title: "Validation Error",
-          description: "Invalid teacher key.",
-          variant: "destructive",
-        });
-        return;
-      }
-    }
-
-=======
     if (signupRole === "teacher") {
       if (!signupTeacherKey.trim()) {
         setSignupError("Teacher access key is required.");
@@ -111,7 +85,6 @@ const AuthPage = () => {
         return;
       }
     }
->>>>>>> 63f2fe4f8b0bc9a0cd9a8ef3eddd002c7d9e96a1
     setLoading(true);
     const { error } = await signUp(
       signupEmail,
@@ -226,14 +199,6 @@ const AuthPage = () => {
 
                   {signupRole === "teacher" && (
                     <div className="space-y-2">
-<<<<<<< HEAD
-                      <Label htmlFor="signup-teacher-key">Teacher Key</Label>
-                      <Input
-                        id="signup-teacher-key"
-                        placeholder="Enter teacher key"
-                        value={signupTeacherKey}
-                        onChange={(e) => setSignupTeacherKey(e.target.value)}
-=======
                       <Label htmlFor="signup-teacher-key">
                         <span className="flex items-center gap-1.5">
                           <KeyRound className="h-3.5 w-3.5" />
@@ -246,7 +211,6 @@ const AuthPage = () => {
                         placeholder="Enter your teacher access key"
                         value={signupTeacherKey}
                         onChange={(e) => { setSignupTeacherKey(e.target.value); setSignupError(null); }}
->>>>>>> 63f2fe4f8b0bc9a0cd9a8ef3eddd002c7d9e96a1
                         required
                       />
                     </div>
