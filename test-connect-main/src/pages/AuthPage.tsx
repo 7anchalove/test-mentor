@@ -38,6 +38,7 @@ const AuthPage = () => {
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
   const [signupRole, setSignupRole] = useState<AppRole>("student");
+  const [signupTeacherKey, setSignupTeacherKey] = useState("");
 
   if (user && profile) {
     return <Navigate to={profile.role === "teacher" ? "/dashboard" : "/choose-test"} replace />;
@@ -66,8 +67,35 @@ const AuthPage = () => {
       toast({ title: "Validation Error", description: result.error.errors[0].message, variant: "destructive" });
       return;
     }
+
+    if (signupRole === "teacher") {
+      if (!signupTeacherKey.trim()) {
+        toast({
+          title: "Validation Error",
+          description: "Teacher key is required.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (signupTeacherKey.trim() !== "52552") {
+        toast({
+          title: "Validation Error",
+          description: "Invalid teacher key.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     setLoading(true);
-    const { error } = await signUp(signupEmail, signupPassword, signupName, signupRole);
+    const { error } = await signUp(
+      signupEmail,
+      signupPassword,
+      signupName,
+      signupRole,
+      signupRole === "teacher" ? signupTeacherKey.trim() : undefined
+    );
     setLoading(false);
     if (error) {
       const msg = error.message.includes("already registered")
@@ -168,6 +196,19 @@ const AuthPage = () => {
                       </button>
                     </div>
                   </div>
+
+                  {signupRole === "teacher" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-teacher-key">Teacher Key</Label>
+                      <Input
+                        id="signup-teacher-key"
+                        placeholder="Enter teacher key"
+                        value={signupTeacherKey}
+                        onChange={(e) => setSignupTeacherKey(e.target.value)}
+                        required
+                      />
+                    </div>
+                  )}
 
                   <Button type="submit" className="w-full" disabled={loading}>
                     {loading ? "Creating account..." : "Create Account"}

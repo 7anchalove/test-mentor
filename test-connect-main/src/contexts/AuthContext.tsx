@@ -20,7 +20,7 @@ interface AuthContextType {
   session: Session | null;
   profile: Profile | null;
   loading: boolean;
-  signUp: (email: string, password: string, name: string, role: AppRole) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, name: string, role: AppRole, teacherKey?: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
 }
@@ -67,17 +67,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => subscription.unsubscribe();
   }, []);
 
-  const signUp = async (email: string, password: string, name: string, role: AppRole) => {
+  const signUp = async (
+    email: string,
+    password: string,
+    name: string,
+    role: AppRole,
+    teacherKey?: string
+  ) => {
     const redirectUrl = `${window.location.origin}/`;
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         emailRedirectTo: redirectUrl,
-        data: { name, role },
+        data: {
+          name,
+          role,
+          ...(role === "teacher" ? { teacher_invite_code: teacherKey ?? null } : {}),
+        },
       },
     });
-    return { error: error as Error | null };
+
+    if (error) {
+      return { error: error as Error | null };
+    }
+
+    const userId = data.user?.id;
+    if (!userId) {
+      return { error: new Error("Signup succeeded but user ID is missing") };
+    }
+
+    const profilePayload: any = {
+      user_id: userId,
+      full_name: name,
+      role,
+    };
+
+    if (role === "teacher") {
+      profilePayload.teacher_invite_code = teacherKey ?? null;
+    }
+
+    const { error: profileError } = await supabase.from("profiles").insert(profilePayload);
+
+    if (profileError) {
+      console.error("Profile insert error:", profileError);
+      return { error: profileError as Error };
+    }
+
+    return { error: null };
   };
 
   const signIn = async (email: string, password: string) => {
