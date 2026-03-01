@@ -19,7 +19,7 @@ import { Label } from "@/components/ui/label";
 import { ArrowLeft, CheckCircle, Loader2, ReceiptText, Upload, User, XCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import AppLayout from "@/components/layout/AppLayout";
-import { format } from "date-fns";
+import { DateTime } from "luxon";
 import type { Database } from "@/integrations/supabase/types";
 import {
   createBookingRequest,
@@ -29,6 +29,12 @@ import {
   uploadReceipt,
   validateReceiptFile,
 } from "@/lib/bookings";
+import {
+  buildUtcIsoFromTunisSlot,
+  formatTunisSlot,
+  getTunisSlotFromDate,
+  TUNIS_IANA_ZONE,
+} from "@/lib/datetime";
 
 type TestCategory = Database["public"]["Enums"]["test_category"];
 
@@ -67,7 +73,12 @@ const TeachersPage = () => {
   const subtype = searchParams.get("subtype") || null;
   const datetimeStr = searchParams.get("datetime") || "";
   const selectedDate = datetimeStr ? new Date(datetimeStr) : null;
-  const datetimeUtcIso = selectedDate && !Number.isNaN(selectedDate.getTime()) ? selectedDate.toISOString() : "";
+  const selectedTunisSlot =
+    selectedDate && !Number.isNaN(selectedDate.getTime()) ? getTunisSlotFromDate(selectedDate) : null;
+  const datetimeUtcIso = selectedTunisSlot ? buildUtcIsoFromTunisSlot(selectedTunisSlot) : "";
+  const selectedDisplayText = selectedTunisSlot
+    ? formatTunisSlot(selectedTunisSlot, "cccc, LLLL d 'at' HH:mm")
+    : "Invalid date/time";
 
   const canUploadReceipt = useMemo(() => {
     return validateReceiptFile(selectedFile) === null;
@@ -156,7 +167,7 @@ const TeachersPage = () => {
         description: "Your receipt was uploaded and your request has been sent to the teacher.",
       });
       queryClient.invalidateQueries({ queryKey: ["student-requests", user?.id] });
-      queryClient.invalidateQueries({ queryKey: ["teachers-availability", datetimeStr, category] });
+      queryClient.invalidateQueries({ queryKey: ["teachers-availability", datetimeUtcIso, category] });
       resetReceiptFlow();
       navigate("/pending-requests", { replace: true });
     },
@@ -203,9 +214,19 @@ const TeachersPage = () => {
     queryKey: ["teachers-availability", datetimeUtcIso, category],
     queryFn: async (): Promise<TeacherWithAvailability[]> => {
       if (isAvailabilityDebugEnabled) {
+        const displayedSlot = selectedTunisSlot
+          ? formatTunisSlot(selectedTunisSlot, "yyyy-LL-dd HH:mm")
+          : "invalid";
+        const roundTripTunis = datetimeUtcIso
+          ? DateTime.fromISO(datetimeUtcIso, { zone: "utc" })
+              .setZone(TUNIS_IANA_ZONE)
+              .toFormat("yyyy-LL-dd HH:mm")
+          : "invalid";
         console.debug("[TeachersPage] RPC payload", {
+          selected_slot_tunis_display: displayedSlot,
           p_datetime_utc: datetimeUtcIso,
           p_test_category: category || null,
+          round_trip_tunis: roundTripTunis,
         });
       }
 
@@ -324,7 +345,7 @@ const TeachersPage = () => {
           <h1 className="text-3xl font-bold font-display">Available Teachers</h1>
           <p className="mt-2 text-muted-foreground">
             For {category?.replace("_", " ") || "test"} {subtype ? `(${subtype})` : ""} on{" "}
-            {selectedDate ? format(selectedDate, "EEEE, MMMM d 'at' HH:mm") : "Invalid date/time"}
+            {selectedDisplayText}
           </p>
         </div>
 
@@ -426,7 +447,7 @@ const TeachersPage = () => {
                   <br />
                   {category ? category.replace(/_/g, " ") : ""}
                   {subtype ? ` (${subtype})` : ""}
-                  {datetimeStr ? <> — {format(new Date(datetimeStr), "EEEE, MMMM d 'at' HH:mm")}</> : null}
+                  {selectedTunisSlot ? <> — {selectedDisplayText}</> : null}
                 </div>
               </div>
 

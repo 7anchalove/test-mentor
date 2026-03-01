@@ -4,6 +4,7 @@
  */
 
 import { describe, it, expect } from "vitest";
+import { buildUtcIsoFromTunisSlot } from "@/lib/datetime";
 
 function buildAvailabilityMap(
   rows: { teacher_id: string; is_available: boolean }[]
@@ -48,5 +49,40 @@ describe("availability merge", () => {
       { teacher_id: "teacher-a", is_available: true },
     ]);
     expect(result.find((r) => r.userId === "teacher-b")?.isAvailable).toBe(false);
+  });
+});
+
+describe("Tunis slot UTC payload", () => {
+  it("builds 2026-03-23 09:00 Tunis as 08:00Z", () => {
+    const result = buildUtcIsoFromTunisSlot({
+      year: 2026,
+      month: 3,
+      day: 23,
+      hour: 9,
+      minute: 0,
+    });
+    expect(result).toBe("2026-03-23T08:00:00.000Z");
+  });
+
+  it("builds 2026-03-30 09:00 Tunis as 08:00Z", () => {
+    const result = buildUtcIsoFromTunisSlot({
+      year: 2026,
+      month: 3,
+      day: 30,
+      hour: 9,
+      minute: 0,
+    });
+    expect(result).toBe("2026-03-30T08:00:00.000Z");
+  });
+
+  it("builds 2026-04-09 09:00 Tunis as 08:00Z", () => {
+    const result = buildUtcIsoFromTunisSlot({
+      year: 2026,
+      month: 4,
+      day: 9,
+      hour: 9,
+      minute: 0,
+    });
+    expect(result).toBe("2026-04-09T08:00:00.000Z");
   });
 });
