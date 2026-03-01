@@ -27,11 +27,10 @@ type ConversationListItem = {
   teacher_id: string;
   updated_at: string;
   otherProfile?: { user_id: string; name: string; role: string } | null;
-  testSelection?: {
-    id: string;
+  bookingSummary?: {
     test_category: string;
     test_subtype: string | null;
-    test_date_time: string;
+    start_date_time: string;
   } | null;
 };
 
@@ -78,19 +77,25 @@ const ConversationsPage = () => {
       if (bookingIds.length) {
         const { data: bookings } = await supabase
           .from("bookings")
-          .select("id, student_test_selection_id")
+          .select(
+            "id, start_date_time, test_category, student_test_selections!bookings_student_test_selection_id_fkey(test_category, test_subtype)"
+          )
           .in("id", bookingIds);
 
         if (bookings?.length) {
-          const selIds = bookings.map((b) => b.student_test_selection_id);
-          const { data: sels } = await supabase
-            .from("student_test_selections")
-            .select("id, test_category, test_subtype, test_date_time")
-            .in("id", selIds);
-
           bookings.forEach((b) => {
-            const sel = sels?.find((s) => s.id === b.student_test_selection_id);
-            if (sel) bookingMap.set(b.id, sel);
+            const rawSelection = (b as any).student_test_selections as
+              | { test_category: string; test_subtype: string | null }
+              | { test_category: string; test_subtype: string | null }[]
+              | null;
+            const selection = Array.isArray(rawSelection) ? rawSelection[0] : rawSelection;
+            const fallbackCategory = (b as any).test_category as string | null | undefined;
+
+            bookingMap.set(b.id, {
+              test_category: selection?.test_category ?? fallbackCategory ?? "Test",
+              test_subtype: selection?.test_subtype ?? null,
+              start_date_time: b.start_date_time,
+            });
           });
         }
       }
@@ -100,7 +105,7 @@ const ConversationsPage = () => {
         otherProfile: profiles?.find(
           (p) => p.user_id === (c.student_id === user.id ? c.teacher_id : c.student_id)
         ),
-        testSelection: c.booking_id ? bookingMap.get(c.booking_id) : null,
+        bookingSummary: c.booking_id ? bookingMap.get(c.booking_id) : null,
       })) as ConversationListItem[];
     },
     enabled: !!user,
@@ -236,11 +241,11 @@ const ConversationsPage = () => {
                     <h3 className="font-semibold font-display truncate">
                       {convo.otherProfile?.name || "Unknown"}
                     </h3>
-                    {convo.testSelection && (
+                    {convo.bookingSummary && (
                       <p className="text-sm text-muted-foreground truncate">
-                        {convo.testSelection.test_category.replace("_", " ")}
-                        {convo.testSelection.test_subtype ? ` (${convo.testSelection.test_subtype})` : ""} •{" "}
-                        {format(new Date(convo.testSelection.test_date_time), "MMM d, HH:mm")}
+                        {convo.bookingSummary.test_category.replace("_", " ")}
+                        {convo.bookingSummary.test_subtype ? ` (${convo.bookingSummary.test_subtype})` : ""} •{" "}
+                        {format(new Date(convo.bookingSummary.start_date_time), "MMM d, HH:mm")}
                       </p>
                     )}
                   </div>
