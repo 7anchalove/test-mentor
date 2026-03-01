@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -36,12 +36,17 @@ interface TeacherWithAvailability {
   userId: string;
   name: string;
   bio: string | null;
+  avatarUrl: string | null;
   headline: string | null;
   subjects: string[] | null;
   isAvailable: boolean;
   spotsLeft: number;
   computedCapacity: number;
 }
+
+type AvailabilityRpcRow = Database["public"]["Functions"]["get_teachers_availability"]["Returns"][number];
+
+const isAvailabilityDebugEnabled = !import.meta.env.PROD;
 
 const TeachersPage = () => {
   const navigate = useNavigate();
@@ -61,7 +66,8 @@ const TeachersPage = () => {
   const category = searchParams.get("category") as TestCategory;
   const subtype = searchParams.get("subtype") || null;
   const datetimeStr = searchParams.get("datetime") || "";
-  const selectedDate = new Date(datetimeStr);
+  const selectedDate = datetimeStr ? new Date(datetimeStr) : null;
+  const datetimeUtcIso = selectedDate && !Number.isNaN(selectedDate.getTime()) ? selectedDate.toISOString() : "";
 
   const canUploadReceipt = useMemo(() => {
     return validateReceiptFile(selectedFile) === null;
@@ -188,68 +194,102 @@ const TeachersPage = () => {
   const isUploading = uploadReceiptMutation.isPending;
   const isSubmitting = sendRequestMutation.isPending;
 
-  const { data: teachers, isLoading } = useQuery({
-    queryKey: ["teachers-availability", datetimeStr, category],
+  const {
+    data: teachers,
+    isLoading,
+    isError,
+    error: teachersError,
+  } = useQuery({
+    queryKey: ["teachers-availability", datetimeUtcIso, category],
     queryFn: async (): Promise<TeacherWithAvailability[]> => {
-      const [teachersRes, availabilityRes] = await Promise.all([
-        (async () => {
-          const { data: teacherProfiles, error: tpErr } = await supabase
-            .from("teacher_profiles")
-            .select("user_id, headline, subjects")
-            .eq("is_active", true);
-          if (tpErr) throw tpErr;
-          if (!teacherProfiles?.length) return { profiles: [], teacherProfiles: [] };
-
-          const teacherIds = teacherProfiles.map((tp) => tp.user_id);
-          const { data: profiles } = await supabase
-            .from("profiles")
-            .select("user_id, name, bio")
-            .in("user_id", teacherIds);
-          return { profiles: profiles ?? [], teacherProfiles };
-        })(),
-        supabase.rpc("get_teachers_availability", {
-          p_datetime_utc: datetimeStr,
+      if (isAvailabilityDebugEnabled) {
+        console.debug("[TeachersPage] RPC payload", {
+          p_datetime_utc: datetimeUtcIso,
           p_test_category: category || null,
-        }),
-      ]);
+        });
+      }
 
-      const { teacherProfiles, profiles } = teachersRes;
-      if (!teacherProfiles?.length) return [];
-
-      const { data: availabilityRows, error: availErr } = availabilityRes;
+      const { data: availabilityRows, error: availErr } = await supabase.rpc("get_teachers_availability", {
+        p_datetime_utc: datetimeUtcIso,
+        p_test_category: category || null,
+      });
       if (availErr) throw availErr;
 
-      const rowByTeacher = new Map(
-        (availabilityRows ?? []).map((row) => [
-          row.teacher_id,
-          {
-            is_available: row.is_available,
-            spots_left: row.spots_left ?? 0,
-            computed_capacity: row.computed_capacity ?? 4,
-          },
-        ])
+      const availableRows = ((availabilityRows ?? []) as AvailabilityRpcRow[]).filter(
+        (row) => row.is_available === true
       );
 
-      return teacherProfiles.map((tp) => {
-        const profile = profiles?.find((p) => p.user_id === tp.user_id);
-        const avail = rowByTeacher.get(tp.user_id);
-        const isAvailable = avail?.is_available ?? false;
-        const spotsLeft = avail?.spots_left ?? 0;
-        const computedCapacity = avail?.computed_capacity ?? 4;
+      if (isAvailabilityDebugEnabled) {
+        console.debug("[TeachersPage] RPC response", {
+          totalRows: (availabilityRows ?? []).length,
+          availableRows: availableRows.length,
+          firstRow: (availabilityRows ?? [])[0] ?? null,
+        });
+      }
+
+      if (!availableRows.length) return [];
+
+      const teacherIds = availableRows.map((row) => row.teacher_id);
+
+      const [profilesRes, teacherProfilesRes] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("user_id, name, bio, avatar_url, role")
+          .in("user_id", teacherIds)
+          .eq("role", "teacher"),
+        supabase
+          .from("teacher_profiles")
+          .select("user_id, headline, subjects")
+          .in("user_id", teacherIds),
+      ]);
+
+      const { data: profileRows, error: profilesErr } = profilesRes;
+      if (profilesErr) throw profilesErr;
+
+      const { data: teacherProfileRows, error: teacherProfilesErr } = teacherProfilesRes;
+      if (teacherProfilesErr) throw teacherProfilesErr;
+
+      if (isAvailabilityDebugEnabled) {
+        console.debug("[TeachersPage] Profiles fetched", {
+          profiles: (profileRows ?? []).length,
+          teacherProfiles: (teacherProfileRows ?? []).length,
+        });
+      }
+
+      const profileByUserId = new Map((profileRows ?? []).map((row) => [row.user_id, row]));
+      const teacherProfileByUserId = new Map((teacherProfileRows ?? []).map((row) => [row.user_id, row]));
+
+      return availableRows.map((rpcRow) => {
+        const profile = profileByUserId.get(rpcRow.teacher_id);
+        const teacherProfile = teacherProfileByUserId.get(rpcRow.teacher_id);
         return {
-          userId: tp.user_id,
+          userId: rpcRow.teacher_id,
           name: profile?.name || "Unknown Teacher",
           bio: profile?.bio,
-          headline: tp.headline,
-          subjects: tp.subjects,
-          isAvailable,
-          spotsLeft,
-          computedCapacity,
+          avatarUrl: profile?.avatar_url ?? null,
+          headline: teacherProfile?.headline ?? null,
+          subjects: teacherProfile?.subjects ?? null,
+          isAvailable: rpcRow.is_available,
+          spotsLeft: rpcRow.spots_left ?? 0,
+          computedCapacity: rpcRow.computed_capacity ?? 4,
         };
       });
     },
-    enabled: !!datetimeStr,
+    enabled: !!datetimeUtcIso,
   });
+
+  useEffect(() => {
+    if (!isError || !teachersError) return;
+    const message = teachersError instanceof Error ? teachersError.message : "Failed to load teachers.";
+    if (isAvailabilityDebugEnabled) {
+      console.error("[TeachersPage] Availability query failed", teachersError);
+    }
+    toast({
+      title: "Failed to load teachers",
+      description: message,
+      variant: "destructive",
+    });
+  }, [isError, teachersError, toast]);
 
   const handleSelectTeacher = (teacherId: string) => {
     if (!user) {
@@ -284,7 +324,7 @@ const TeachersPage = () => {
           <h1 className="text-3xl font-bold font-display">Available Teachers</h1>
           <p className="mt-2 text-muted-foreground">
             For {category?.replace("_", " ") || "test"} {subtype ? `(${subtype})` : ""} on{" "}
-            {format(selectedDate, "EEEE, MMMM d 'at' HH:mm")}
+            {selectedDate ? format(selectedDate, "EEEE, MMMM d 'at' HH:mm") : "Invalid date/time"}
           </p>
         </div>
 
@@ -308,7 +348,15 @@ const TeachersPage = () => {
                   <CardContent className="flex items-center justify-between gap-4 p-5">
                     <div className="flex items-start gap-4">
                       <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-muted">
-                        <User className="h-6 w-6 text-muted-foreground" />
+                        {teacher.avatarUrl ? (
+                          <img
+                            src={teacher.avatarUrl}
+                            alt={teacher.name}
+                            className="h-12 w-12 rounded-full object-cover"
+                          />
+                        ) : (
+                          <User className="h-6 w-6 text-muted-foreground" />
+                        )}
                       </div>
                       <div>
                         <h3 className="font-semibold font-display">{teacher.name}</h3>
@@ -376,7 +424,7 @@ const TeachersPage = () => {
                 <div className="mt-1 text-muted-foreground">
                   Teacher: {selectedTeacher?.name ?? "Selected teacher"}
                   <br />
-                  {category ? category.replaceAll("_", " ") : ""}
+                  {category ? category.replace(/_/g, " ") : ""}
                   {subtype ? ` (${subtype})` : ""}
                   {datetimeStr ? <> — {format(new Date(datetimeStr), "EEEE, MMMM d 'at' HH:mm")}</> : null}
                 </div>
