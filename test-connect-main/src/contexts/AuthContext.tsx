@@ -74,47 +74,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     role: AppRole,
     teacherKey?: string
   ) => {
-    const redirectUrl = `${window.location.origin}/`;
-    const { data, error } = await supabase.auth.signUp({
+    const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo: redirectUrl,
         data: {
-          name,
+          full_name: name,
           role,
-          ...(role === "teacher" ? { teacher_invite_code: teacherKey ?? null } : {}),
+          teacher_invite_code: role === "teacher" ? teacherKey?.trim() : null,
         },
       },
     });
 
-    if (error) {
-      return { error: error as Error | null };
-    }
-
-    const userId = data.user?.id;
-    if (!userId) {
-      return { error: new Error("Signup succeeded but user ID is missing") };
-    }
-
-    const profilePayload: any = {
-      user_id: userId,
-      full_name: name,
-      role,
-    };
-
-    if (role === "teacher") {
-      profilePayload.teacher_invite_code = teacherKey ?? null;
-    }
-
-    const { error: profileError } = await supabase.from("profiles").insert(profilePayload);
-
-    if (profileError) {
-      console.error("Profile insert error:", profileError);
-      return { error: profileError as Error };
-    }
-
-    return { error: null };
+    return { error: error as Error | null };
   };
 
   const signIn = async (email: string, password: string) => {
