@@ -117,13 +117,16 @@ export default function UploadReceiptPage() {
     },
     onError: (err: any) => {
       const isDuplicateBooking = isDuplicateActiveBookingError(err);
+      const title = isDuplicateBooking
+        ? "Request already exists"
+        : "Request failed";
       const message = isDuplicateBooking
-        ? "You already have a request at this time. Please choose another time."
-        : "We couldn’t submit your request right now. Please try again.";
+        ? "You already have a booking request for this time slot. Pick a different time or cancel the existing request first."
+        : "We couldn't submit your request right now. Please try again in a moment.";
 
       setError(message);
       toast({
-        title: "Could not submit request",
+        title,
         description: message,
         variant: "destructive",
       });

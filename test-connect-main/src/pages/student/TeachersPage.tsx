@@ -161,15 +161,21 @@ const TeachersPage = () => {
         err?.message?.toLowerCase?.().includes("capacity") ||
         err?.message?.toLowerCase?.().includes("slot is full");
 
-      const message = isDuplicateBooking
-        ? "You already have a request at this time. Please choose another time."
+      const title = isDuplicateBooking
+        ? "Request already exists"
         : isCapacityFull
-          ? "This time slot is full for this teacher. Please pick another time or teacher."
-          : err?.message ?? "Please try again.";
+          ? "Time slot full"
+          : "Request failed";
+
+      const message = isDuplicateBooking
+        ? "You already have a booking request for this time slot. Pick a different time or cancel the existing request first."
+        : isCapacityFull
+          ? "This time slot is fully booked. Please choose a different time or another teacher."
+          : "We couldn't submit your request right now. Please try again in a moment.";
 
       setError(message);
       toast({
-        title: "Could not submit request",
+        title,
         description: message,
         variant: "destructive",
       });
@@ -412,7 +418,7 @@ const TeachersPage = () => {
 
                 {receiptUrl ? (
                   <p className="flex items-center gap-2 text-xs text-success">
-                    <ReceiptText className="h-3.5 w-3.5" /> Receipt uploaded: {receiptUrl}
+                    <ReceiptText className="h-3.5 w-3.5" /> Receipt uploaded: {uploadedReceipt?.receiptOriginalName ?? selectedFile?.name ?? "Receipt file"}
                   </p>
                 ) : selectedFile ? (
                   <p className="text-xs text-muted-foreground">Selected: {selectedFile.name}</p>

@@ -6,8 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { GraduationCap, User, BookOpen } from "lucide-react";
+import { GraduationCap, User, BookOpen, KeyRound } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { FormError } from "@/components/ui/form-error";
+import { PasswordRequirements } from "@/components/ui/password-requirements";
 import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -32,6 +34,7 @@ const AuthPage = () => {
   // Login state
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   // Signup state
   const [signupName, setSignupName] = useState("");
@@ -39,6 +42,10 @@ const AuthPage = () => {
   const [signupPassword, setSignupPassword] = useState("");
   const [signupRole, setSignupRole] = useState<AppRole>("student");
   const [signupTeacherKey, setSignupTeacherKey] = useState("");
+<<<<<<< HEAD
+=======
+  const [signupError, setSignupError] = useState<string | null>(null);
+>>>>>>> 63f2fe4f8b0bc9a0cd9a8ef3eddd002c7d9e96a1
 
   if (user && profile) {
     return <Navigate to={profile.role === "teacher" ? "/dashboard" : "/choose-test"} replace />;
@@ -46,27 +53,32 @@ const AuthPage = () => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoginError(null);
     const result = loginSchema.safeParse({ email: loginEmail, password: loginPassword });
     if (!result.success) {
-      toast({ title: "Validation Error", description: result.error.errors[0].message, variant: "destructive" });
+      setLoginError(result.error.errors[0].message);
       return;
     }
     setLoading(true);
     const { error } = await signIn(loginEmail, loginPassword);
     setLoading(false);
     if (error) {
-      const msg = error.message.includes("Invalid login") ? "Invalid email or password" : error.message;
-      toast({ title: "Login Failed", description: msg, variant: "destructive" });
+      const msg = error.message.includes("Invalid login")
+        ? "The email or password you entered is incorrect. Please try again."
+        : error.message;
+      setLoginError(msg);
     }
   };
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSignupError(null);
     const result = signupSchema.safeParse({ email: signupEmail, password: signupPassword, name: signupName });
     if (!result.success) {
-      toast({ title: "Validation Error", description: result.error.errors[0].message, variant: "destructive" });
+      setSignupError(result.error.errors[0].message);
       return;
     }
+<<<<<<< HEAD
 
     if (signupRole === "teacher") {
       if (!signupTeacherKey.trim()) {
@@ -88,6 +100,18 @@ const AuthPage = () => {
       }
     }
 
+=======
+    if (signupRole === "teacher") {
+      if (!signupTeacherKey.trim()) {
+        setSignupError("Teacher access key is required.");
+        return;
+      }
+      if (signupTeacherKey.trim() !== "52552") {
+        setSignupError("The teacher access key is incorrect. Please contact the platform administrator.");
+        return;
+      }
+    }
+>>>>>>> 63f2fe4f8b0bc9a0cd9a8ef3eddd002c7d9e96a1
     setLoading(true);
     const { error } = await signUp(
       signupEmail,
@@ -99,9 +123,9 @@ const AuthPage = () => {
     setLoading(false);
     if (error) {
       const msg = error.message.includes("already registered")
-        ? "This email is already registered. Try logging in."
+        ? "This email is already registered. Try logging in instead."
         : error.message;
-      toast({ title: "Signup Failed", description: msg, variant: "destructive" });
+      setSignupError(msg);
     } else {
       toast({
         title: "Account Created!",
@@ -133,13 +157,14 @@ const AuthPage = () => {
             <CardContent>
               <TabsContent value="login" className="mt-0">
                 <form onSubmit={handleLogin} className="space-y-4">
+                  <FormError message={loginError} />
                   <div className="space-y-2">
                     <Label htmlFor="login-email">Email</Label>
-                    <Input id="login-email" type="email" placeholder="you@example.com" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} required />
+                    <Input id="login-email" type="email" placeholder="you@example.com" value={loginEmail} onChange={(e) => { setLoginEmail(e.target.value); setLoginError(null); }} required />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="login-password">Password</Label>
-                    <Input id="login-password" type="password" placeholder="••••••••" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} required />
+                    <Input id="login-password" type="password" placeholder="••••••••" value={loginPassword} onChange={(e) => { setLoginPassword(e.target.value); setLoginError(null); }} required />
                   </div>
                   <div className="text-right">
                     <Link to="/auth/forgot-password" className="text-sm text-primary hover:underline">
@@ -154,17 +179,19 @@ const AuthPage = () => {
 
               <TabsContent value="signup" className="mt-0">
                 <form onSubmit={handleSignup} className="space-y-4">
+                  <FormError message={signupError} />
                   <div className="space-y-2">
                     <Label htmlFor="signup-name">Full Name</Label>
-                    <Input id="signup-name" placeholder="Your name" value={signupName} onChange={(e) => setSignupName(e.target.value)} required />
+                    <Input id="signup-name" placeholder="Your name" value={signupName} onChange={(e) => { setSignupName(e.target.value); setSignupError(null); }} required />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="signup-email">Email</Label>
-                    <Input id="signup-email" type="email" placeholder="you@example.com" value={signupEmail} onChange={(e) => setSignupEmail(e.target.value)} required />
+                    <Input id="signup-email" type="email" placeholder="you@example.com" value={signupEmail} onChange={(e) => { setSignupEmail(e.target.value); setSignupError(null); }} required />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="signup-password">Password</Label>
-                    <Input id="signup-password" type="password" placeholder="••••••••" value={signupPassword} onChange={(e) => setSignupPassword(e.target.value)} required />
+                    <Input id="signup-password" type="password" placeholder="••••••••" value={signupPassword} onChange={(e) => { setSignupPassword(e.target.value); setSignupError(null); }} required />
+                    <PasswordRequirements password={signupPassword} minLength={6} />
                   </div>
 
                   <div className="space-y-2">
@@ -199,12 +226,27 @@ const AuthPage = () => {
 
                   {signupRole === "teacher" && (
                     <div className="space-y-2">
+<<<<<<< HEAD
                       <Label htmlFor="signup-teacher-key">Teacher Key</Label>
                       <Input
                         id="signup-teacher-key"
                         placeholder="Enter teacher key"
                         value={signupTeacherKey}
                         onChange={(e) => setSignupTeacherKey(e.target.value)}
+=======
+                      <Label htmlFor="signup-teacher-key">
+                        <span className="flex items-center gap-1.5">
+                          <KeyRound className="h-3.5 w-3.5" />
+                          Teacher Key
+                        </span>
+                      </Label>
+                      <Input
+                        id="signup-teacher-key"
+                        type="password"
+                        placeholder="Enter your teacher access key"
+                        value={signupTeacherKey}
+                        onChange={(e) => { setSignupTeacherKey(e.target.value); setSignupError(null); }}
+>>>>>>> 63f2fe4f8b0bc9a0cd9a8ef3eddd002c7d9e96a1
                         required
                       />
                     </div>
