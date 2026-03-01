@@ -11,6 +11,16 @@ import { ArrowLeft, Send, CalendarIcon, Clock, BookOpen } from "lucide-react";
 import { format } from "date-fns";
 import AppLayout from "@/components/layout/AppLayout";
 
+type ChatBookingInfo = {
+  id: string;
+  test_category: string;
+  test_subtype: string | null;
+  start_date_time: string;
+  status: string;
+  student_id: string;
+  teacher_id: string;
+};
+
 const ChatPage = () => {
   const { conversationId } = useParams<{ conversationId: string }>();
   const { user } = useAuth();
@@ -55,24 +65,38 @@ const ChatPage = () => {
   });
 
   // Fetch booking details
-  const { data: bookingDetails } = useQuery({
-    queryKey: ["booking-details", conversation?.booking_id],
+  const { data: bookingInfo } = useQuery({
+    queryKey: ["booking-info", conversation?.booking_id],
     queryFn: async () => {
       if (!conversation?.booking_id) return null;
-      const { data: booking } = await supabase
+
+      const { data: booking, error: bookingErr } = await supabase
         .from("bookings")
-        .select("*")
+        .select(
+          "id, start_date_time, status, student_id, teacher_id, student_test_selections!bookings_student_test_selection_id_fkey(test_category, test_subtype)"
+        )
         .eq("id", conversation.booking_id)
         .single();
+      if (bookingErr) throw bookingErr;
       if (!booking) return null;
 
-      const { data: selection } = await supabase
-        .from("student_test_selections")
-        .select("*")
-        .eq("id", booking.student_test_selection_id)
-        .single();
+      const rawSelection = booking.student_test_selections as
+        | { test_category: string; test_subtype: string | null }
+        | { test_category: string; test_subtype: string | null }[]
+        | null;
+      const selection = Array.isArray(rawSelection) ? rawSelection[0] : rawSelection;
 
-      return { booking, selection };
+      if (!selection?.test_category) return null;
+
+      return {
+        id: booking.id,
+        test_category: selection.test_category,
+        test_subtype: selection.test_subtype,
+        start_date_time: booking.start_date_time,
+        status: booking.status,
+        student_id: booking.student_id,
+        teacher_id: booking.teacher_id,
+      } as ChatBookingInfo;
     },
     enabled: !!conversation?.booking_id,
   });
@@ -144,7 +168,8 @@ const ChatPage = () => {
     sendMutation.mutate(message);
   };
 
-  const selection = bookingDetails?.selection;
+  const canSeeBookingInfo =
+    !!bookingInfo && !!user?.id && (user.id === bookingInfo.student_id || user.id === bookingInfo.teacher_id);
 
   return (
     <AppLayout>
@@ -161,30 +186,30 @@ const ChatPage = () => {
         </div>
 
         {/* Test info card */}
-        {selection && (
+        {canSeeBookingInfo && bookingInfo && (
           <Card className="mb-4 border-primary/20 bg-accent/50">
             <CardContent className="flex flex-wrap items-center gap-4 p-4">
               <div className="flex items-center gap-2">
                 <BookOpen className="h-4 w-4 text-primary" />
                 <span className="text-sm font-medium">
-                  {selection.test_category.replace("_", " ")}
-                  {selection.test_subtype ? ` (${selection.test_subtype})` : ""}
+                  {bookingInfo.test_category.replace("_", " ")}
+                  {bookingInfo.test_subtype ? ` (${bookingInfo.test_subtype})` : ""}
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 <CalendarIcon className="h-4 w-4 text-primary" />
                 <span className="text-sm">
-                  {format(new Date(selection.test_date_time), "MMM d, yyyy")}
+                  {format(new Date(bookingInfo.start_date_time), "MMM d, yyyy")}
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4 text-primary" />
                 <span className="text-sm">
-                  {format(new Date(selection.test_date_time), "HH:mm")}
+                  {format(new Date(bookingInfo.start_date_time), "HH:mm")}
                 </span>
               </div>
               <Badge variant="secondary" className="text-xs">
-                {bookingDetails.booking.status}
+                {bookingInfo.status}
               </Badge>
             </CardContent>
           </Card>
