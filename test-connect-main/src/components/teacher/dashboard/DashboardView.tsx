@@ -247,6 +247,8 @@ const RequestCard: React.FC<RequestCardProps> = ({ booking, onAccept, onReject, 
   const [bookingDetails, setBookingDetails] = useState<any | null>(null);
   const [loadingBookingDetails, setLoadingBookingDetails] = useState(false);
 
+  const formatLocal = (dateTime: string) => format(new Date(dateTime), "PPpp");
+
   const receiptPath = (booking as any)?.receipt_path as string | undefined;
   const receiptMime = ((booking as any)?.receipt_mime as string | undefined) ?? "";
 
@@ -272,14 +274,6 @@ const RequestCard: React.FC<RequestCardProps> = ({ booking, onAccept, onReject, 
             user_id,
             full_name,
             email
-          ),
-          selection:student_test_selections!bookings_student_test_selection_id_fkey (
-            id,
-            test_category,
-            university,
-            exam_date,
-            exam_time,
-            notes
           )
         `)
         .eq("id", booking.id)
@@ -299,13 +293,6 @@ const RequestCard: React.FC<RequestCardProps> = ({ booking, onAccept, onReject, 
               user_id,
               name,
               email
-            ),
-            selection:student_test_selections!bookings_student_test_selection_id_fkey (
-              id,
-              test_category,
-              test_subtype,
-              test_date_time,
-              notes
             )
           `)
           .eq("id", booking.id)
@@ -328,16 +315,9 @@ const RequestCard: React.FC<RequestCardProps> = ({ booking, onAccept, onReject, 
     };
   }, [booking.id, open]);
 
-  const selectedTestCategory = bookingDetails?.selection?.test_category ?? booking.selection?.test_category;
-  const selectedTestSubtype = bookingDetails?.selection?.test_subtype ?? booking.selection?.test_subtype;
   const studentFullName = bookingDetails?.student?.full_name ?? bookingDetails?.student?.name ?? booking.student?.name;
   const studentEmail = bookingDetails?.student?.email ?? booking.student?.email;
   const requestedSlot = bookingDetails?.start_date_time ?? booking.start_date_time;
-  const examDate = bookingDetails?.selection?.exam_date;
-  const examTime = bookingDetails?.selection?.exam_time;
-  const examDateTime = bookingDetails?.selection?.test_date_time;
-  const notes = bookingDetails?.selection?.notes;
-  const university = bookingDetails?.selection?.university;
 
   useEffect(() => {
     let alive = true;
@@ -413,40 +393,13 @@ const RequestCard: React.FC<RequestCardProps> = ({ booking, onAccept, onReject, 
                 {loadingBookingDetails ? (
                   <div className="text-sm text-muted-foreground">Loading request details…</div>
                 ) : (
-                  <div className="grid gap-3 text-sm sm:grid-cols-2">
-                    <div>
-                      <div className="text-xs text-muted-foreground">Test category</div>
-                      <div className="font-medium">
-                        {selectedTestCategory
-                          ? `${selectedTestCategory.replace("_", " ")}${selectedTestSubtype ? ` (${selectedTestSubtype})` : ""}`
-                          : "—"}
-                      </div>
+                  <div className="rounded-lg border p-4">
+                    <div className="text-sm text-muted-foreground mb-2">
+                      Requested slot
                     </div>
 
-                    <div>
-                      <div className="text-xs text-muted-foreground">Requested slot</div>
-                      <div className="font-medium">{format(new Date(requestedSlot), "PPpp")}</div>
-                    </div>
-
-                    <div>
-                      <div className="text-xs text-muted-foreground">University</div>
-                      <div className="font-medium">{university || "—"}</div>
-                    </div>
-
-                    <div>
-                      <div className="text-xs text-muted-foreground">Exam date/time</div>
-                      <div className="font-medium">
-                        {examDate || examTime
-                          ? [examDate, examTime].filter(Boolean).join(" ")
-                          : examDateTime
-                            ? format(new Date(examDateTime), "PPpp")
-                            : "—"}
-                      </div>
-                    </div>
-
-                    <div className="sm:col-span-2">
-                      <div className="text-xs text-muted-foreground">Notes</div>
-                      <div className="font-medium whitespace-pre-wrap">{notes || "—"}</div>
+                    <div className="text-base font-medium">
+                      {formatLocal(requestedSlot)}
                     </div>
                   </div>
                 )}
