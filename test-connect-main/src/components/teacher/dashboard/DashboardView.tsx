@@ -244,12 +244,100 @@ const RequestCard: React.FC<RequestCardProps> = ({ booking, onAccept, onReject, 
   const [open, setOpen] = useState(false);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [loadingReceipt, setLoadingReceipt] = useState(false);
+  const [bookingDetails, setBookingDetails] = useState<any | null>(null);
+  const [loadingBookingDetails, setLoadingBookingDetails] = useState(false);
 
   const receiptPath = (booking as any)?.receipt_path as string | undefined;
   const receiptMime = ((booking as any)?.receipt_mime as string | undefined) ?? "";
 
   const isImage = useMemo(() => receiptMime.startsWith("image/"), [receiptMime]);
   const isPdf = useMemo(() => receiptMime === "application/pdf", [receiptMime]);
+
+  useEffect(() => {
+    let alive = true;
+
+    async function loadBookingDetails() {
+      if (!open) return;
+
+      setLoadingBookingDetails(true);
+
+      const { data, error } = await supabase
+        .from("bookings")
+        .select(`
+          id,
+          status,
+          start_date_time,
+          created_at,
+          student:profiles!bookings_student_id_fkey (
+            user_id,
+            full_name,
+            email
+          ),
+          selection:student_test_selections!bookings_student_test_selection_id_fkey (
+            id,
+            test_category,
+            university,
+            exam_date,
+            exam_time,
+            notes
+          )
+        `)
+        .eq("id", booking.id)
+        .single();
+
+      if (!alive) return;
+
+      if (error) {
+        const { data: fallbackData } = await supabase
+          .from("bookings")
+          .select(`
+            id,
+            status,
+            start_date_time,
+            created_at,
+            student:profiles!bookings_student_id_fkey (
+              user_id,
+              name,
+              email
+            ),
+            selection:student_test_selections!bookings_student_test_selection_id_fkey (
+              id,
+              test_category,
+              test_subtype,
+              test_date_time,
+              notes
+            )
+          `)
+          .eq("id", booking.id)
+          .single();
+
+        if (!alive) return;
+        setBookingDetails(fallbackData ?? null);
+        setLoadingBookingDetails(false);
+        return;
+      }
+
+      setBookingDetails(data ?? null);
+      setLoadingBookingDetails(false);
+    }
+
+    loadBookingDetails();
+
+    return () => {
+      alive = false;
+    };
+  }, [booking.id, open]);
+
+  const selectedTestCategory = bookingDetails?.selection?.test_category ?? booking.selection?.test_category;
+  const selectedTestSubtype = bookingDetails?.selection?.test_subtype ?? booking.selection?.test_subtype;
+  const studentFullName = bookingDetails?.student?.full_name ?? bookingDetails?.student?.name ?? booking.student?.name;
+  const studentEmail = bookingDetails?.student?.email ?? booking.student?.email;
+  const requestedSlot = bookingDetails?.start_date_time ?? booking.start_date_time;
+  const examDate = bookingDetails?.selection?.exam_date;
+  const examTime = bookingDetails?.selection?.exam_time;
+  const examDateTime = bookingDetails?.selection?.test_date_time;
+  const notes = bookingDetails?.selection?.notes;
+  const university = bookingDetails?.selection?.university;
 
   useEffect(() => {
     let alive = true;
@@ -315,22 +403,53 @@ const RequestCard: React.FC<RequestCardProps> = ({ booking, onAccept, onReject, 
             </DialogHeader>
 
             <div className="space-y-3">
+              <div className="space-y-1">
+                <div className="text-sm font-semibold">{studentFullName ?? "Student"}</div>
+                <div className="text-xs text-muted-foreground">{studentEmail ?? "No email available"}</div>
+              </div>
+
               <div className="rounded-lg border p-4">
-                <div className="text-sm">
-                  <div className="font-medium">Student</div>
-                  <div className="text-muted-foreground">{booking.student?.name} — {booking.student?.email}</div>
-                </div>
-                {booking.selection ? (
-                  <div className="mt-3 text-sm">
-                    <div className="font-medium">Test</div>
-                    <div className="text-muted-foreground">
-                      {booking.selection.test_category.replace("_", " ")}
-                      {booking.selection.test_subtype ? ` (${booking.selection.test_subtype})` : ""}
-                      {" — "}
-                      {format(new Date(booking.start_date_time), "PPpp")}
+                <div className="mb-3 text-sm font-medium">Request details</div>
+                {loadingBookingDetails ? (
+                  <div className="text-sm text-muted-foreground">Loading request details…</div>
+                ) : (
+                  <div className="grid gap-3 text-sm sm:grid-cols-2">
+                    <div>
+                      <div className="text-xs text-muted-foreground">Test category</div>
+                      <div className="font-medium">
+                        {selectedTestCategory
+                          ? `${selectedTestCategory.replace("_", " ")}${selectedTestSubtype ? ` (${selectedTestSubtype})` : ""}`
+                          : "—"}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-xs text-muted-foreground">Requested slot</div>
+                      <div className="font-medium">{format(new Date(requestedSlot), "PPpp")}</div>
+                    </div>
+
+                    <div>
+                      <div className="text-xs text-muted-foreground">University</div>
+                      <div className="font-medium">{university || "—"}</div>
+                    </div>
+
+                    <div>
+                      <div className="text-xs text-muted-foreground">Exam date/time</div>
+                      <div className="font-medium">
+                        {examDate || examTime
+                          ? [examDate, examTime].filter(Boolean).join(" ")
+                          : examDateTime
+                            ? format(new Date(examDateTime), "PPpp")
+                            : "—"}
+                      </div>
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <div className="text-xs text-muted-foreground">Notes</div>
+                      <div className="font-medium whitespace-pre-wrap">{notes || "—"}</div>
                     </div>
                   </div>
-                ) : null}
+                )}
               </div>
 
               <div className="rounded-lg border p-4">
