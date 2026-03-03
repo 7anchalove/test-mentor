@@ -46,6 +46,9 @@ export type Database = {
       }
       bookings: {
         Row: {
+          admin_override_at: string | null
+          admin_override_by: string | null
+          admin_override_reason: string | null
           archived_by_teacher: boolean
           created_at: string
           id: string
@@ -63,6 +66,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          admin_override_at?: string | null
+          admin_override_by?: string | null
+          admin_override_reason?: string | null
           archived_by_teacher?: boolean
           created_at?: string
           id?: string
@@ -80,6 +86,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          admin_override_at?: string | null
+          admin_override_by?: string | null
+          admin_override_reason?: string | null
           archived_by_teacher?: boolean
           created_at?: string
           id?: string
@@ -475,7 +484,7 @@ export type Database = {
     }
     Functions: {
       admin_override_booking_status: {
-        Args: { booking_id: string; new_status: Database["public"]["Enums"]["booking_status"]; reason: string }
+        Args: { booking_id: string; new_status: string; reason: string }
         Returns: undefined
       }
       admin_set_teacher_suspended: {

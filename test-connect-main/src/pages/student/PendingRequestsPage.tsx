@@ -75,6 +75,13 @@ function canCancelRequest(status: string | null | undefined) {
   return normalized === BOOKING_STATUS.PENDING || normalized === BOOKING_STATUS.CONFIRMED;
 }
 
+function formatAdminOverrideTimestamp(value: string | null | undefined) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleString();
+}
+
 const PendingRequestsPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -471,6 +478,19 @@ const PendingRequestsPage = () => {
                           </>
                         )}
                       </div>
+
+                      {req.admin_override_reason && (
+                        <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                          <p>
+                            <span className="font-semibold">Admin note:</span> {req.admin_override_reason}
+                          </p>
+                          {formatAdminOverrideTimestamp(req.admin_override_at) && (
+                            <p className="mt-1 text-amber-700">
+                              {formatAdminOverrideTimestamp(req.admin_override_at)}
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
 

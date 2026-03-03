@@ -17,6 +17,8 @@ import {
 } from "@/components/ui/alert-dialog";
 
 export type DashboardBooking = {
+  admin_override_at?: string | null;
+  admin_override_reason?: string | null;
   id: string;
   status: string;
   start_date_time: string;
@@ -69,6 +71,12 @@ const BookingCard: React.FC<BookingCardProps> = ({ booking, canArchive, isArchiv
                 {format(new Date(booking.start_date_time), "HH:mm")}
               </span>
             </div>
+
+            {booking.admin_override_reason && (
+              <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900">
+                <span className="font-semibold">Admin note:</span> {booking.admin_override_reason}
+              </div>
+            )}
           </div>
         </div>
 
