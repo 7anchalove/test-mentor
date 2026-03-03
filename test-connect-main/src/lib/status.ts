@@ -1,4 +1,5 @@
 import { BOOKING_STATUS } from "@/lib/bookingStatus";
+import { PAYMENT_STATUS } from "@/lib/paymentStatus";
 
 export type StatusTone = "green" | "yellow" | "blue" | "red" | "gray";
 
@@ -10,6 +11,9 @@ export function getStatusTone(rawStatus: string | null | undefined): StatusTone 
   if (status === BOOKING_STATUS.PENDING_REVIEW || status === BOOKING_STATUS.PENDING || status === BOOKING_STATUS.AWAITING_RECEIPT) return "yellow";
   if (status === BOOKING_STATUS.CONFIRMED) return "green";
   if (status === BOOKING_STATUS.DECLINED || status === BOOKING_STATUS.CANCELLED) return "red";
+  if (status === PAYMENT_STATUS.WAITING) return "yellow";
+  if (status === PAYMENT_STATUS.PAID) return "green";
+  if (status === PAYMENT_STATUS.NOT_PAID) return "red";
 
   return "gray";
 }

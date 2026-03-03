@@ -1,7 +1,7 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { GraduationCap, LogOut, MessageSquare, Calendar, LayoutDashboard, BookOpen, ClipboardList } from "lucide-react";
+import { GraduationCap, LogOut, MessageSquare, Calendar, LayoutDashboard, BookOpen, ClipboardList, Wallet } from "lucide-react";
 import NotificationsBell from "@/components/NotificationsBell";
 
 const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -20,6 +20,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     ? [
         { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
         { path: "/sessions", label: "Sessions", icon: Calendar },
+        { path: "/teacher/payments", label: "Payments", icon: Wallet },
         { path: "/availability", label: "Availability", icon: Calendar },
         { path: "/conversations", label: "Messages", icon: MessageSquare },
       ]

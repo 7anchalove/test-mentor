@@ -19,6 +19,9 @@ export type Database = {
           archived_by_teacher: boolean
           created_at: string
           id: string
+          paid_at: string | null
+          payment_note: string | null
+          payment_status: Database["public"]["Enums"]["payment_status"]
           receipt_mime: string | null
           receipt_original_name: string | null
           receipt_path: string | null
@@ -33,6 +36,9 @@ export type Database = {
           archived_by_teacher?: boolean
           created_at?: string
           id?: string
+          paid_at?: string | null
+          payment_note?: string | null
+          payment_status?: Database["public"]["Enums"]["payment_status"]
           receipt_mime?: string | null
           receipt_original_name?: string | null
           receipt_path?: string | null
@@ -47,6 +53,9 @@ export type Database = {
           archived_by_teacher?: boolean
           created_at?: string
           id?: string
+          paid_at?: string | null
+          payment_note?: string | null
+          payment_status?: Database["public"]["Enums"]["payment_status"]
           receipt_mime?: string | null
           receipt_original_name?: string | null
           receipt_path?: string | null
@@ -469,6 +478,7 @@ export type Database = {
     Enums: {
       app_role: "student" | "teacher"
       booking_status: "pending" | "confirmed" | "cancelled" | "awaiting_receipt" | "pending_review" | "declined"
+      payment_status: "waiting" | "paid" | "not_paid"
       session_status: "scheduled" | "completed" | "cancelled"
       test_category: "ITA_L2" | "TOLC" | "CENTS" | "CLA"
     }
@@ -600,6 +610,7 @@ export const Constants = {
     Enums: {
       app_role: ["student", "teacher"],
       booking_status: ["pending", "confirmed", "cancelled", "awaiting_receipt", "pending_review", "declined"],
+      payment_status: ["waiting", "paid", "not_paid"],
       test_category: ["ITA_L2", "TOLC", "CENTS", "CLA"],
     },
   },

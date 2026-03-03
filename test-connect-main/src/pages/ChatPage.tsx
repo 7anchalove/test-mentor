@@ -5,14 +5,18 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Send, CalendarIcon, Clock, BookOpen } from "lucide-react";
 import { format } from "date-fns";
 import AppLayout from "@/components/layout/AppLayout";
+import { PAYMENT_STATUS } from "@/lib/paymentStatus";
+import { toStatusLabel } from "@/lib/status";
 
 type ChatBookingInfo = {
   id: string;
+  payment_status: string;
   test_category: string | null;
   test_subtype: string | null;
   start_date_time: string;
@@ -75,7 +79,7 @@ const ChatPage = () => {
       const { data: booking, error: bookingErr } = await supabase
         .from("bookings")
         .select(
-          "id, start_date_time, status, student_id, teacher_id, student_test_selections!bookings_student_test_selection_id_fkey(test_category, test_subtype)"
+          "id, start_date_time, status, payment_status, student_id, teacher_id, student_test_selections!bookings_student_test_selection_id_fkey(test_category, test_subtype)"
         )
         .eq("id", conversation.booking_id)
         .single();
@@ -90,6 +94,7 @@ const ChatPage = () => {
 
       return {
         id: booking.id,
+        payment_status: booking.payment_status,
         test_category: selection?.test_category ?? null,
         test_subtype: selection?.test_subtype ?? null,
         start_date_time: booking.start_date_time,
@@ -170,6 +175,8 @@ const ChatPage = () => {
 
   const canSeeBookingInfo =
     !!bookingInfo && !!user?.id && (user.id === bookingInfo.student_id || user.id === bookingInfo.teacher_id);
+  const isPaymentPending = !!bookingInfo && bookingInfo.payment_status !== PAYMENT_STATUS.PAID;
+  const isTeacherViewer = !!bookingInfo && user?.id === bookingInfo.teacher_id;
   const bookingCategoryLabel = bookingInfo?.test_category
     ? bookingInfo.test_category.replace("_", " ")
     : "Test";
@@ -231,6 +238,17 @@ const ChatPage = () => {
               </Badge>
             </CardContent>
           </Card>
+        )}
+
+        {canSeeBookingInfo && isPaymentPending && bookingInfo && (
+          <Alert className="mb-4">
+            <AlertTitle>Waiting for payment</AlertTitle>
+            <AlertDescription>
+              {isTeacherViewer
+                ? `This booking is ${toStatusLabel(bookingInfo.payment_status)}. Confirm offline payment before continuing.`
+                : `Your payment is currently ${toStatusLabel(bookingInfo.payment_status)}. Please complete payment with your teacher.`}
+            </AlertDescription>
+          </Alert>
         )}
 
         {/* Messages */}

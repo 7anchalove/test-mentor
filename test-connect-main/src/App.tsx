@@ -20,6 +20,7 @@ import ConversationsPage from "./pages/ConversationsPage";
 import SessionsPage from "./pages/SessionsPage";
 import TeacherDashboard from "./pages/teacher/TeacherDashboard";
 import AvailabilityPage from "./pages/teacher/AvailabilityPage";
+import TeacherPaymentsPage from "./pages/teacher/TeacherPaymentsPage";
 import NotFound from "./pages/NotFound";
 import AvailabilityTestPage from "./pages/dev/AvailabilityTestPage";
 
@@ -52,6 +53,7 @@ const App = () => (
             {/* Teacher routes */}
             <Route path="/dashboard" element={<ProtectedRoute requiredRole="teacher"><TeacherDashboard /></ProtectedRoute>} />
             <Route path="/availability" element={<ProtectedRoute requiredRole="teacher"><AvailabilityPage /></ProtectedRoute>} />
+            <Route path="/teacher/payments" element={<ProtectedRoute requiredRole="teacher"><TeacherPaymentsPage /></ProtectedRoute>} />
 
             {/* Shared routes */}
             <Route path="/sessions" element={<ProtectedRoute><SessionsPage /></ProtectedRoute>} />
