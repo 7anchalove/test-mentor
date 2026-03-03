@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_audit_log: {
+        Row: {
+          action: string
+          admin_user_id: string
+          created_at: string
+          details: Json | null
+          entity: string
+          entity_id: string | null
+          id: string
+        }
+        Insert: {
+          action: string
+          admin_user_id: string
+          created_at?: string
+          details?: Json | null
+          entity: string
+          entity_id?: string | null
+          id?: string
+        }
+        Update: {
+          action?: string
+          admin_user_id?: string
+          created_at?: string
+          details?: Json | null
+          entity?: string
+          entity_id?: string | null
+          id?: string
+        }
+        Relationships: []
+      }
       bookings: {
         Row: {
           archived_by_teacher: boolean
@@ -176,8 +206,10 @@ export type Database = {
           created_at: string
           email: string
           id: string
+          is_suspended: boolean | null
           name: string
           role: Database["public"]["Enums"]["app_role"]
+          suspended_at: string | null
           updated_at: string
           user_id: string
         }
@@ -187,8 +219,10 @@ export type Database = {
           created_at?: string
           email: string
           id?: string
+          is_suspended?: boolean | null
           name: string
           role?: Database["public"]["Enums"]["app_role"]
+          suspended_at?: string | null
           updated_at?: string
           user_id: string
         }
@@ -198,8 +232,10 @@ export type Database = {
           created_at?: string
           email?: string
           id?: string
+          is_suspended?: boolean | null
           name?: string
           role?: Database["public"]["Enums"]["app_role"]
+          suspended_at?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -438,6 +474,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_override_booking_status: {
+        Args: { booking_id: string; new_status: Database["public"]["Enums"]["booking_status"]; reason: string }
+        Returns: undefined
+      }
+      admin_set_teacher_suspended: {
+        Args: { reason?: string | null; suspended: boolean; teacher_user_id: string }
+        Returns: undefined
+      }
       create_booking_with_capacity_check: {
         Args: {
           p_student_id: string
@@ -474,9 +518,13 @@ export type Database = {
         Args: { _conversation_id: string; _user_id: string }
         Returns: boolean
       }
+      is_admin: {
+        Args: { uid: string }
+        Returns: boolean
+      }
     }
     Enums: {
-      app_role: "student" | "teacher"
+      app_role: "admin" | "student" | "teacher"
       booking_status: "pending" | "confirmed" | "cancelled" | "awaiting_receipt" | "pending_review" | "declined"
       payment_status: "waiting" | "paid" | "not_paid"
       session_status: "scheduled" | "completed" | "cancelled"
@@ -608,7 +656,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["student", "teacher"],
+      app_role: ["admin", "student", "teacher"],
       booking_status: ["pending", "confirmed", "cancelled", "awaiting_receipt", "pending_review", "declined"],
       payment_status: ["waiting", "paid", "not_paid"],
       test_category: ["ITA_L2", "TOLC", "CENTS", "CLA"],

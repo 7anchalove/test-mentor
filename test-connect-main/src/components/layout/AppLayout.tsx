@@ -1,7 +1,7 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { GraduationCap, LogOut, MessageSquare, Calendar, LayoutDashboard, BookOpen, ClipboardList, Wallet } from "lucide-react";
+import { GraduationCap, LogOut, MessageSquare, Calendar, LayoutDashboard, BookOpen, ClipboardList, Wallet, ShieldCheck, Users } from "lucide-react";
 import NotificationsBell from "@/components/NotificationsBell";
 
 const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -16,26 +16,34 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   const isActive = (path: string) => location.pathname === path;
 
-  const navItems = profile?.role === "teacher"
+  const navItems = profile?.role === "admin"
     ? [
-        { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-        { path: "/sessions", label: "Sessions", icon: Calendar },
-        { path: "/teacher/payments", label: "Payments", icon: Wallet },
-        { path: "/availability", label: "Availability", icon: Calendar },
-        { path: "/conversations", label: "Messages", icon: MessageSquare },
+        { path: "/admin", label: "Overview", icon: ShieldCheck },
+        { path: "/admin/bookings", label: "Bookings", icon: LayoutDashboard },
+        { path: "/admin/teachers", label: "Teachers", icon: Users },
       ]
-    : [
-        { path: "/choose-test", label: "Book a Test", icon: BookOpen },
-        { path: "/pending-requests", label: "Requests", icon: ClipboardList },
-        { path: "/sessions", label: "Sessions", icon: Calendar },
-        { path: "/conversations", label: "Messages", icon: MessageSquare },
-      ];
+    : profile?.role === "teacher"
+      ? [
+          { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+          { path: "/sessions", label: "Sessions", icon: Calendar },
+          { path: "/teacher/payments", label: "Payments", icon: Wallet },
+          { path: "/availability", label: "Availability", icon: Calendar },
+          { path: "/conversations", label: "Messages", icon: MessageSquare },
+        ]
+      : [
+          { path: "/choose-test", label: "Book a Test", icon: BookOpen },
+          { path: "/pending-requests", label: "Requests", icon: ClipboardList },
+          { path: "/sessions", label: "Sessions", icon: Calendar },
+          { path: "/conversations", label: "Messages", icon: MessageSquare },
+        ];
+
+  const homePath = profile?.role === "admin" ? "/admin" : profile?.role === "teacher" ? "/dashboard" : "/choose-test";
 
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 border-b border-border bg-card/80 backdrop-blur-lg">
         <div className="container flex h-16 items-center justify-between">
-          <Link to={profile?.role === "teacher" ? "/dashboard" : "/choose-test"} className="flex items-center gap-2">
+          <Link to={homePath} className="flex items-center gap-2">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg gradient-hero">
               <GraduationCap className="h-5 w-5 text-primary-foreground" />
             </div>

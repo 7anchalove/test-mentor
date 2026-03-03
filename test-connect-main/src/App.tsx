@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import AdminRoute from "@/components/AdminRoute";
 
 import Index from "./pages/Index";
 import AuthPage from "./pages/AuthPage";
@@ -21,6 +22,9 @@ import SessionsPage from "./pages/SessionsPage";
 import TeacherDashboard from "./pages/teacher/TeacherDashboard";
 import AvailabilityPage from "./pages/teacher/AvailabilityPage";
 import TeacherPaymentsPage from "./pages/teacher/TeacherPaymentsPage";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminBookings from "./pages/admin/AdminBookings";
+import AdminTeachers from "./pages/admin/AdminTeachers";
 import NotFound from "./pages/NotFound";
 import AvailabilityTestPage from "./pages/dev/AvailabilityTestPage";
 
@@ -54,6 +58,11 @@ const App = () => (
             <Route path="/dashboard" element={<ProtectedRoute requiredRole="teacher"><TeacherDashboard /></ProtectedRoute>} />
             <Route path="/availability" element={<ProtectedRoute requiredRole="teacher"><AvailabilityPage /></ProtectedRoute>} />
             <Route path="/teacher/payments" element={<ProtectedRoute requiredRole="teacher"><TeacherPaymentsPage /></ProtectedRoute>} />
+
+            {/* Admin routes */}
+            <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+            <Route path="/admin/bookings" element={<AdminRoute><AdminBookings /></AdminRoute>} />
+            <Route path="/admin/teachers" element={<AdminRoute><AdminTeachers /></AdminRoute>} />
 
             {/* Shared routes */}
             <Route path="/sessions" element={<ProtectedRoute><SessionsPage /></ProtectedRoute>} />
