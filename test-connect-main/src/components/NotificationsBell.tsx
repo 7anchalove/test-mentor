@@ -31,6 +31,9 @@ type NotificationItem = {
 const MAX_NOTIFICATIONS = 20;
 const BOOKING_RELATED_KEYWORDS = ["booking", "request"] as const;
 const BOOKING_DECISION_STATUSES = ["confirmed", "declined", "cancelled", "accepted"] as const;
+const ADMIN_NOTIFICATION_KEYWORDS = ["admin", "override", "suspend", "unsuspend", "audit"] as const;
+
+type ViewerRole = "student" | "teacher" | "admin" | null;
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -93,12 +96,80 @@ function getNotificationDestination(notification: NotificationItem, role?: strin
   return getNotificationUrl(notification);
 }
 
+function getViewerRole(role?: string | null): ViewerRole {
+  const normalizedRole = String(role ?? "").toLowerCase();
+  if (normalizedRole === "admin") return "admin";
+  if (normalizedRole === "teacher") return "teacher";
+  if (normalizedRole === "student") return "student";
+  return null;
+}
+
+function getRoleText(notification: NotificationItem) {
+  const data = asRecord(notification.data);
+  const payload = asRecord(notification.payload);
+
+  return [
+    notification.title,
+    notification.body,
+    notification.type,
+    notification.kind,
+    getString(notification.action_url),
+    getString(notification.url),
+    getString(data?.type),
+    getString(data?.kind),
+    getString(data?.role),
+    getString(data?.audience),
+    getString(payload?.type),
+    getString(payload?.kind),
+    getString(payload?.role),
+    getString(payload?.audience),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function isAdminNotification(notification: NotificationItem) {
+  const text = getRoleText(notification);
+  const destination = getNotificationUrl(notification)?.toLowerCase() ?? "";
+  return destination.includes("/admin") || ADMIN_NOTIFICATION_KEYWORDS.some((keyword) => text.includes(keyword));
+}
+
+function isTeacherNotification(notification: NotificationItem) {
+  const text = getRoleText(notification);
+  return text.includes("teacher") || text.includes("new booking request") || text.includes("booking request");
+}
+
+function isNotificationVisibleForRole(notification: NotificationItem, role: ViewerRole) {
+  if (role === "admin") {
+    return isAdminNotification(notification);
+  }
+
+  if (role === "teacher") {
+    if (isAdminNotification(notification)) return false;
+    return isTeacherNotification(notification) || !isStudentBookingNotification(notification);
+  }
+
+  if (role === "student") {
+    if (isAdminNotification(notification)) return false;
+    return isStudentBookingNotification(notification) || !isTeacherNotification(notification);
+  }
+
+  return false;
+}
+
+function filterNotificationsForRole(items: NotificationItem[], role: ViewerRole) {
+  return items.filter((item) => isNotificationVisibleForRole(item, role));
+}
+
 const NotificationsBell = () => {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const viewerRole = getViewerRole(profile?.role);
+  const isTeacherViewer = viewerRole === "teacher" && viewerRole !== "admin";
 
   const unreadCount = useMemo(
     () => notifications.filter((item) => !item.is_read).length,
@@ -109,6 +180,11 @@ const NotificationsBell = () => {
     const loadNotifications = async () => {
       if (!user?.id) {
         console.warn("[NotificationsBell] Missing session user. Skipping notifications query.");
+        setNotifications([]);
+        return;
+      }
+
+      if (!viewerRole) {
         setNotifications([]);
         return;
       }
@@ -132,18 +208,19 @@ const NotificationsBell = () => {
         return;
       }
 
-      setNotifications((data ?? []) as NotificationItem[]);
+      const scoped = filterNotificationsForRole((data ?? []) as NotificationItem[], viewerRole);
+      setNotifications(scoped);
       setLoading(false);
     };
 
     loadNotifications();
-  }, [user?.id]);
+  }, [user?.id, viewerRole]);
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id || !viewerRole) return;
 
     const channel = supabase
-      .channel(`notifications-user-${user.id}`)
+      .channel(`notifications-user-${viewerRole}-${user.id}`)
       .on(
         "postgres_changes",
         {
@@ -155,6 +232,7 @@ const NotificationsBell = () => {
         (payload) => {
           const incoming = payload.new as NotificationItem;
           if (!incoming?.id) return;
+          if (!isNotificationVisibleForRole(incoming, viewerRole)) return;
 
           setNotifications((prev) => {
             if (prev.some((item) => item.id === incoming.id)) return prev;
@@ -179,7 +257,7 @@ const NotificationsBell = () => {
         console.error("[NotificationsBell] Failed to remove notifications realtime channel", error);
       });
     };
-  }, [user?.id]);
+  }, [user?.id, viewerRole]);
 
   const markAsRead = async (id: string) => {
     if (!user?.id) {
@@ -256,6 +334,7 @@ const NotificationsBell = () => {
       url: getNotificationUrl(notification),
       destination,
       role: profile?.role ?? null,
+      isTeacherViewer,
     });
 
     if (destination) {

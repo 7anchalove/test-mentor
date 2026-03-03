@@ -52,16 +52,17 @@ async function enrichBookingsRows(rows: any[]): Promise<DashboardBooking[]> {
 }
 
 const TeacherDashboard = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const isTeacherRole = profile?.role === "teacher" && profile?.role !== "admin";
 
   const view = parseDashboardView(searchParams.get("view"));
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !isTeacherRole) return;
 
     const channel = supabase
       .channel(`teacher-booking-requests-${user.id}`)
@@ -92,13 +93,13 @@ const TeacherDashboard = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [queryClient, toast, user]);
+  }, [isTeacherRole, queryClient, toast, user]);
 
   const { data: stats = { upcoming: 0, completed: 0, total: 0 } as DashboardStats } = useQuery({
     queryKey: ["teacher-dashboard-stats", user?.id],
-    enabled: !!user,
+    enabled: !!user && isTeacherRole,
     queryFn: async () => {
-      if (!user) return { upcoming: 0, completed: 0, total: 0 };
+      if (!user || !isTeacherRole) return { upcoming: 0, completed: 0, total: 0 };
 
       const { data, error } = await supabase
         .from("bookings")
@@ -120,9 +121,9 @@ const TeacherDashboard = () => {
 
   const { data: bookings = [], isLoading } = useQuery({
     queryKey: ["teacher-dashboard-bookings", user?.id, view],
-    enabled: !!user,
+    enabled: !!user && isTeacherRole,
     queryFn: async () => {
-      if (!user) return [];
+      if (!user || !isTeacherRole) return [];
 
       let query = supabase
         .from("bookings")
@@ -150,9 +151,9 @@ const TeacherDashboard = () => {
 
   const { data: requests = [] } = useQuery({
     queryKey: ["teacher-dashboard-requests", user?.id],
-    enabled: !!user,
+    enabled: !!user && isTeacherRole,
     queryFn: async () => {
-      if (!user) return [];
+      if (!user || !isTeacherRole) return [];
 
       const { data, error } = await supabase
         .from("bookings")
