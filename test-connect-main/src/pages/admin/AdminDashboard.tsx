@@ -7,7 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
-import { type AdminAuditRow, formatAuditRow } from "@/lib/adminAuditFormat";
+import {
+  type AdminAuditRow,
+  formatAuditRow,
+  getOverrideBookingDetails,
+  getTeacherSuspendDetails,
+  isOverrideBookingAction,
+  isTeacherSuspensionAction,
+} from "@/lib/adminAuditFormat";
 
 type OverviewCounts = {
   totalUsers: number;
@@ -226,30 +233,68 @@ const AdminDashboard = () => {
                                   <DialogDescription>{item.id}</DialogDescription>
                                 </DialogHeader>
 
-                                <div className="space-y-2 text-sm">
-                                  <p><strong>Action:</strong> {item.action}</p>
-                                  <p><strong>Entity Type:</strong> {item.entity_type ?? "-"}</p>
-                                  <p><strong>Entity ID:</strong> {item.entity_id ?? "-"}</p>
-                                  <p><strong>Admin User ID:</strong> {item.admin_user_id || "-"}</p>
-                                  <p><strong>Created At:</strong> {new Date(item.created_at).toLocaleString()}</p>
-                                  {formatted.reason && <p><strong>Reason:</strong> {formatted.reason}</p>}
-                                </div>
-
-                                <div className="space-y-2">
-                                  <details className="rounded-md border p-2">
-                                    <summary className="cursor-pointer text-sm font-medium">Before JSON</summary>
-                                    <pre className="mt-2 overflow-auto rounded bg-muted p-2 text-xs">
-                                      {JSON.stringify(item.before, null, 2)}
-                                    </pre>
-                                  </details>
-
-                                  <details className="rounded-md border p-2">
-                                    <summary className="cursor-pointer text-sm font-medium">After JSON</summary>
-                                    <pre className="mt-2 overflow-auto rounded bg-muted p-2 text-xs">
-                                      {JSON.stringify(item.after, null, 2)}
-                                    </pre>
-                                  </details>
-                                </div>
+                                {isOverrideBookingAction(item.action) ? (
+                                  <div className="space-y-2 text-sm">
+                                    {(() => {
+                                      const details = getOverrideBookingDetails(item);
+                                      return (
+                                        <>
+                                          <p><strong>Booking ID:</strong> {details.bookingId ?? item.entity_id ?? "-"}</p>
+                                          <p>
+                                            <strong>Status change:</strong>{" "}
+                                            {details.fromStatus && details.toStatus
+                                              ? `${details.fromStatus} → ${details.toStatus}`
+                                              : "-"}
+                                          </p>
+                                          {(details.fromPaymentStatus || details.toPaymentStatus) && (
+                                            <p>
+                                              <strong>Payment status change:</strong>{" "}
+                                              {(details.fromPaymentStatus ?? "-")} → {(details.toPaymentStatus ?? "-")}
+                                            </p>
+                                          )}
+                                          {details.startDateTime && (
+                                            <p>
+                                              <strong>Start date/time:</strong>{" "}
+                                              {new Date(details.startDateTime).toLocaleString()}
+                                            </p>
+                                          )}
+                                          <p><strong>Reason:</strong> {details.reason ?? "-"}</p>
+                                          <p><strong>Changed by:</strong> {item.admin_user_id || "-"}</p>
+                                          <p><strong>Created at:</strong> {new Date(item.created_at).toLocaleString()}</p>
+                                        </>
+                                      );
+                                    })()}
+                                  </div>
+                                ) : isTeacherSuspensionAction(item.action) ? (
+                                  <div className="space-y-2 text-sm">
+                                    {(() => {
+                                      const details = getTeacherSuspendDetails(item);
+                                      return (
+                                        <>
+                                          <p><strong>Teacher ID:</strong> {details.teacherId ?? item.entity_id ?? "-"}</p>
+                                          <p>
+                                            <strong>Suspended:</strong>{" "}
+                                            {details.fromSuspended !== undefined && details.toSuspended !== undefined
+                                              ? `${String(details.fromSuspended)} → ${String(details.toSuspended)}`
+                                              : "-"}
+                                          </p>
+                                          <p><strong>Reason:</strong> {details.reason ?? "-"}</p>
+                                          <p><strong>Admin user:</strong> {item.admin_user_id || "-"}</p>
+                                          <p><strong>Timestamp:</strong> {new Date(item.created_at).toLocaleString()}</p>
+                                        </>
+                                      );
+                                    })()}
+                                  </div>
+                                ) : (
+                                  <div className="space-y-2 text-sm">
+                                    <p><strong>Action:</strong> {item.action}</p>
+                                    <p><strong>Entity Type:</strong> {item.entity_type ?? "-"}</p>
+                                    <p><strong>Entity ID:</strong> {item.entity_id ?? "-"}</p>
+                                    {formatted.reason && <p><strong>Reason:</strong> {formatted.reason}</p>}
+                                    <p><strong>Admin user:</strong> {item.admin_user_id || "-"}</p>
+                                    <p><strong>Timestamp:</strong> {new Date(item.created_at).toLocaleString()}</p>
+                                  </div>
+                                )}
                               </DialogContent>
                             </Dialog>
                           </div>
