@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import AppLayout from "@/components/layout/AppLayout";
@@ -6,11 +7,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 
 type AdminAction = {
+  admin_user_id: string;
+  after: Record<string, unknown> | null;
+  entity_type: string;
   id: string;
   action: string;
-  entity: string;
   entity_id: string | null;
-  details: Record<string, unknown> | null;
   created_at: string;
 };
 
@@ -27,11 +29,6 @@ function formatSupabaseError(error: unknown) {
   const code = String(anyError?.code ?? "").trim();
   const message = String(anyError?.message ?? "Unknown error").trim();
   return code ? `${message} (code: ${code})` : message;
-}
-
-function isMissingTableError(error: unknown) {
-  const code = String((error as { code?: string } | null | undefined)?.code ?? "").toUpperCase();
-  return code === "42P01" || code === "PGRST205";
 }
 
 function isMissingColumnError(error: any, column: string) {
@@ -81,32 +78,11 @@ async function fetchOverviewCounts(): Promise<OverviewCounts> {
   };
 }
 
-async function fetchRecentAdminActions(): Promise<{ rows: AdminAction[]; unavailable: boolean }> {
-  const { data, error } = await supabase
-    .from("admin_audit_log")
-    .select("id, action, entity, entity_id, details, created_at")
-    .order("created_at", { ascending: false })
-    .limit(20);
-
-  if (error) {
-    if (isMissingTableError(error)) return { rows: [], unavailable: true };
-    throw error;
-  }
-
-  return {
-    rows: ((data ?? []) as any[]).map((row) => ({
-      id: row.id,
-      action: String(row.action ?? ""),
-      entity: String(row.entity ?? ""),
-      entity_id: row.entity_id ?? null,
-      details: (row.details as Record<string, unknown> | null) ?? null,
-      created_at: String(row.created_at ?? ""),
-    })),
-    unavailable: false,
-  };
-}
-
 const AdminDashboard = () => {
+  const [actions, setActions] = useState<AdminAction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const {
     data: counts,
     isLoading: isLoadingCounts,
@@ -116,14 +92,50 @@ const AdminDashboard = () => {
     queryFn: fetchOverviewCounts,
   });
 
-  const {
-    data: recentActions,
-    isLoading: isLoadingActions,
-    error: actionsError,
-  } = useQuery({
-    queryKey: ["admin-overview-audit"],
-    queryFn: fetchRecentAdminActions,
-  });
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadActions = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const { data, error: fetchError } = await supabase
+          .from("admin_audit_log")
+          .select("id,created_at,admin_user_id,action,entity_type,entity_id,after")
+          .order("created_at", { ascending: false })
+          .limit(20);
+
+        if (fetchError) throw fetchError;
+
+        if (!isMounted) return;
+
+        setActions(
+          ((data ?? []) as any[]).map((row) => ({
+            id: String(row.id ?? ""),
+            created_at: String(row.created_at ?? ""),
+            admin_user_id: String(row.admin_user_id ?? ""),
+            action: String(row.action ?? ""),
+            entity_type: String(row.entity_type ?? ""),
+            entity_id: row.entity_id ?? null,
+            after: (row.after as Record<string, unknown> | null) ?? null,
+          })),
+        );
+      } catch (caughtError: unknown) {
+        if (!isMounted) return;
+        setError(formatSupabaseError(caughtError));
+      } finally {
+        if (!isMounted) return;
+        setLoading(false);
+      }
+    };
+
+    loadActions();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   return (
     <AppLayout>
@@ -133,10 +145,10 @@ const AdminDashboard = () => {
           <p className="text-sm text-muted-foreground">Platform metrics and recent administrative actions.</p>
         </div>
 
-        {(countsError || actionsError) && (
+        {countsError && (
           <Alert variant="destructive">
             <AlertTitle>Could not load admin data</AlertTitle>
-            <AlertDescription>{formatSupabaseError(countsError ?? actionsError)}</AlertDescription>
+            <AlertDescription>{formatSupabaseError(countsError)}</AlertDescription>
           </Alert>
         )}
 
@@ -180,22 +192,22 @@ const AdminDashboard = () => {
             <CardTitle>Recent admin actions</CardTitle>
           </CardHeader>
           <CardContent>
-            {isLoadingActions && <p className="text-sm text-muted-foreground">Loading recent actions...</p>}
+            {loading && <p className="text-sm text-muted-foreground">Loading recent actions...</p>}
 
-            {!isLoadingActions && recentActions?.unavailable && (
-              <p className="text-sm text-muted-foreground">Audit log table is not available in this environment.</p>
+            {!loading && error && (
+              <p className="text-sm text-destructive">Failed to load admin actions: {error}</p>
             )}
 
-            {!isLoadingActions && !recentActions?.unavailable && (recentActions?.rows.length ?? 0) === 0 && (
-              <p className="text-sm text-muted-foreground">No admin actions found yet.</p>
+            {!loading && !error && actions.length === 0 && (
+              <p className="text-sm text-muted-foreground">No admin actions yet.</p>
             )}
 
-            {!isLoadingActions && !recentActions?.unavailable && (recentActions?.rows.length ?? 0) > 0 && (
+            {!loading && !error && actions.length > 0 && (
               <div className="space-y-2">
-                {recentActions?.rows.map((item) => (
+                {actions.map((item) => (
                   <div key={item.id} className="rounded-md border p-3">
                     <div className="text-sm font-medium">
-                      {item.action} · {item.entity}
+                      {item.action} · {item.entity_type}
                     </div>
                     <div className="text-xs text-muted-foreground">
                       {new Date(item.created_at).toLocaleString()}
