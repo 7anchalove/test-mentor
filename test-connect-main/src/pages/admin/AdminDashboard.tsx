@@ -3,18 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 
 import AppLayout from "@/components/layout/AppLayout";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
-
-type AdminAction = {
-  admin_user_id: string;
-  after: Record<string, unknown> | null;
-  entity_type: string;
-  id: string;
-  action: string;
-  entity_id: string | null;
-  created_at: string;
-};
+import { type AdminAuditRow, formatAuditRow } from "@/lib/adminAuditFormat";
 
 type OverviewCounts = {
   totalUsers: number;
@@ -79,7 +72,7 @@ async function fetchOverviewCounts(): Promise<OverviewCounts> {
 }
 
 const AdminDashboard = () => {
-  const [actions, setActions] = useState<AdminAction[]>([]);
+  const [actions, setActions] = useState<AdminAuditRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -102,7 +95,7 @@ const AdminDashboard = () => {
       try {
         const { data, error: fetchError } = await supabase
           .from("admin_audit_log")
-          .select("id,created_at,admin_user_id,action,entity_type,entity_id,after")
+          .select("id,created_at,admin_user_id,action,entity_type,entity_id,before,after")
           .order("created_at", { ascending: false })
           .limit(20);
 
@@ -116,8 +109,9 @@ const AdminDashboard = () => {
             created_at: String(row.created_at ?? ""),
             admin_user_id: String(row.admin_user_id ?? ""),
             action: String(row.action ?? ""),
-            entity_type: String(row.entity_type ?? ""),
+            entity_type: row.entity_type ? String(row.entity_type) : null,
             entity_id: row.entity_id ?? null,
+            before: (row.before as Record<string, unknown> | null) ?? null,
             after: (row.after as Record<string, unknown> | null) ?? null,
           })),
         );
@@ -206,12 +200,62 @@ const AdminDashboard = () => {
               <div className="space-y-2">
                 {actions.map((item) => (
                   <div key={item.id} className="rounded-md border p-3">
-                    <div className="text-sm font-medium">
-                      {item.action} · {item.entity_type}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {new Date(item.created_at).toLocaleString()}
-                    </div>
+                    {(() => {
+                      const formatted = formatAuditRow(item);
+                      return (
+                        <>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="space-y-1">
+                              <div className="text-sm font-medium">{formatted.title}</div>
+                              {formatted.subtitle && (
+                                <div className="text-sm text-muted-foreground">{formatted.subtitle}</div>
+                              )}
+                              <div className="text-xs text-muted-foreground">
+                                {new Date(item.created_at).toLocaleString()}
+                                {formatted.meta ? ` · ${formatted.meta}` : ""}
+                              </div>
+                            </div>
+
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button size="sm" variant="outline">Details</Button>
+                              </DialogTrigger>
+                              <DialogContent className="max-w-2xl">
+                                <DialogHeader>
+                                  <DialogTitle>Admin action details</DialogTitle>
+                                  <DialogDescription>{item.id}</DialogDescription>
+                                </DialogHeader>
+
+                                <div className="space-y-2 text-sm">
+                                  <p><strong>Action:</strong> {item.action}</p>
+                                  <p><strong>Entity Type:</strong> {item.entity_type ?? "-"}</p>
+                                  <p><strong>Entity ID:</strong> {item.entity_id ?? "-"}</p>
+                                  <p><strong>Admin User ID:</strong> {item.admin_user_id || "-"}</p>
+                                  <p><strong>Created At:</strong> {new Date(item.created_at).toLocaleString()}</p>
+                                  {formatted.reason && <p><strong>Reason:</strong> {formatted.reason}</p>}
+                                </div>
+
+                                <div className="space-y-2">
+                                  <details className="rounded-md border p-2">
+                                    <summary className="cursor-pointer text-sm font-medium">Before JSON</summary>
+                                    <pre className="mt-2 overflow-auto rounded bg-muted p-2 text-xs">
+                                      {JSON.stringify(item.before, null, 2)}
+                                    </pre>
+                                  </details>
+
+                                  <details className="rounded-md border p-2">
+                                    <summary className="cursor-pointer text-sm font-medium">After JSON</summary>
+                                    <pre className="mt-2 overflow-auto rounded bg-muted p-2 text-xs">
+                                      {JSON.stringify(item.after, null, 2)}
+                                    </pre>
+                                  </details>
+                                </div>
+                              </DialogContent>
+                            </Dialog>
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 ))}
               </div>
