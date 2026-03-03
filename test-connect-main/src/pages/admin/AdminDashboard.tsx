@@ -22,6 +22,18 @@ type OverviewCounts = {
   paidBookings: number | null;
 };
 
+function formatSupabaseError(error: unknown) {
+  const anyError = error as { code?: string; message?: string } | null | undefined;
+  const code = String(anyError?.code ?? "").trim();
+  const message = String(anyError?.message ?? "Unknown error").trim();
+  return code ? `${message} (code: ${code})` : message;
+}
+
+function isMissingTableError(error: unknown) {
+  const code = String((error as { code?: string } | null | undefined)?.code ?? "").toUpperCase();
+  return code === "42P01" || code === "PGRST205";
+}
+
 function isMissingColumnError(error: any, column: string) {
   const message = String(error?.message ?? "").toLowerCase();
   return message.includes(column.toLowerCase()) && message.includes("does not exist");
@@ -77,8 +89,7 @@ async function fetchRecentAdminActions(): Promise<{ rows: AdminAction[]; unavail
     .limit(20);
 
   if (error) {
-    const tableMissing = String(error?.message ?? "").toLowerCase().includes("admin_audit_log");
-    if (tableMissing) return { rows: [], unavailable: true };
+    if (isMissingTableError(error)) return { rows: [], unavailable: true };
     throw error;
   }
 
@@ -125,7 +136,7 @@ const AdminDashboard = () => {
         {(countsError || actionsError) && (
           <Alert variant="destructive">
             <AlertTitle>Could not load admin data</AlertTitle>
-            <AlertDescription>{(countsError as Error)?.message ?? (actionsError as Error)?.message}</AlertDescription>
+            <AlertDescription>{formatSupabaseError(countsError ?? actionsError)}</AlertDescription>
           </Alert>
         )}
 
