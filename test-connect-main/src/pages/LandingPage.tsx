@@ -20,6 +20,9 @@ import {
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { Navigate } from "react-router-dom";
+import type { Database } from "@/integrations/supabase/types";
+
+type AppRole = Database["public"]["Enums"]["app_role"];
 
 const benefits = [
   {
@@ -110,10 +113,31 @@ const faqs = [
 const LandingPage = () => {
   const { user, profile } = useAuth();
 
+  const getHomeRouteForRole = (role: AppRole) => {
+    if (role === "admin") return "/admin";
+    if (role === "teacher") return "/dashboard";
+    if (role === "student") return "/choose-test";
+    return null;
+  };
+
   if (user && profile) {
+    const destination = getHomeRouteForRole(profile.role);
+    if (!destination) {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-background p-4">
+          <div className="w-full max-w-lg rounded-xl border bg-card p-6 text-center">
+            <h1 className="text-xl font-semibold">Unsupported account role</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Your account role is not recognized. Please contact support.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <Navigate
-        to={profile.role === "teacher" ? "/dashboard" : "/choose-test"}
+        to={destination}
         replace
       />
     );

@@ -1,5 +1,9 @@
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { Database } from "@/integrations/supabase/types";
+
+type AppRole = Database["public"]["Enums"]["app_role"];
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -8,6 +12,14 @@ interface ProtectedRouteProps {
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole }) => {
   const { user, profile, loading } = useAuth();
+  const location = useLocation();
+
+  const getHomeRouteForRole = (role: AppRole) => {
+    if (role === "admin") return "/admin";
+    if (role === "teacher") return "/dashboard";
+    if (role === "student") return "/choose-test";
+    return null;
+  };
 
   if (loading) {
     return (
@@ -19,8 +31,41 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole 
 
   if (!user) return <Navigate to="/auth" replace />;
 
-  if (requiredRole && profile && profile.role !== requiredRole) {
-    return <Navigate to={profile.role === "teacher" ? "/dashboard" : "/choose-test"} replace />;
+  if (!profile) {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-4">
+        <Card className="w-full max-w-lg">
+          <CardHeader>
+            <CardTitle>Profile not available</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground">
+            We could not load your profile. Please sign out and sign in again.
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (profile.role === "admin" && !location.pathname.startsWith("/admin")) {
+    return <Navigate to="/admin" replace />;
+  }
+
+  if (requiredRole && profile.role !== requiredRole) {
+    const destination = getHomeRouteForRole(profile.role);
+    if (destination) return <Navigate to={destination} replace />;
+
+    return (
+      <div className="flex min-h-screen items-center justify-center p-4">
+        <Card className="w-full max-w-lg">
+          <CardHeader>
+            <CardTitle>Unsupported account role</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground">
+            Your account role is not recognized by this app build.
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   return <>{children}</>;

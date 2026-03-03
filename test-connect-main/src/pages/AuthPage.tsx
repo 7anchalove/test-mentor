@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, Navigate, Link } from "react-router-dom";
+import { Navigate, Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,7 +26,6 @@ const signupSchema = loginSchema.extend({
 
 const AuthPage = () => {
   const { signIn, signUp, user, profile } = useAuth();
-  const navigate = useNavigate();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<"login" | "signup">("login");
@@ -44,8 +43,31 @@ const AuthPage = () => {
   const [signupTeacherKey, setSignupTeacherKey] = useState("");
   const [signupError, setSignupError] = useState<string | null>(null);
 
+  const getHomeRouteForRole = (role: AppRole) => {
+    if (role === "admin") return "/admin";
+    if (role === "teacher") return "/dashboard";
+    if (role === "student") return "/choose-test";
+    return null;
+  };
+
   if (user && profile) {
-    return <Navigate to={profile.role === "teacher" ? "/dashboard" : "/choose-test"} replace />;
+    const destination = getHomeRouteForRole(profile.role);
+    if (destination) {
+      return <Navigate to={destination} replace />;
+    }
+
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-lg">
+          <CardHeader>
+            <CardTitle>Unsupported account role</CardTitle>
+            <CardDescription>
+              Your account role is not recognized by this app build. Contact support to fix your profile role.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    );
   }
 
   const handleLogin = async (e: React.FormEvent) => {

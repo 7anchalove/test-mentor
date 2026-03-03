@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface AdminRouteProps {
   children: React.ReactNode;
@@ -11,7 +12,7 @@ interface AdminRouteProps {
 const AdminRoute: React.FC<AdminRouteProps> = ({ children }) => {
   const { user, loading } = useAuth();
 
-  const { data: role, isLoading } = useQuery({
+  const { data: role, isLoading, error } = useQuery({
     queryKey: ["admin-route-role", user?.id],
     enabled: !!user?.id,
     queryFn: async () => {
@@ -35,6 +36,21 @@ const AdminRoute: React.FC<AdminRouteProps> = ({ children }) => {
   }
 
   if (!user) return <Navigate to="/auth" replace />;
+
+  if (error) {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-4">
+        <Card className="w-full max-w-lg">
+          <CardHeader>
+            <CardTitle>Could not verify admin access</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground">
+            {(error as Error).message}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (role !== "admin") return <Navigate to="/" replace />;
 
