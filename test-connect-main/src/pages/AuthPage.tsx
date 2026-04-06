@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Navigate, Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,8 +25,10 @@ const signupSchema = loginSchema.extend({
   name: z.string().trim().min(2, "Name must be at least 2 characters").max(100),
 });
 
+type SignupRole = "teacher" | "student";
+
 const AuthPage = () => {
-  const { signIn, signUp, user, profile } = useAuth();
+  const { signIn, user, profile } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<"login" | "signup">("login");
@@ -98,31 +101,50 @@ const AuthPage = () => {
       return;
     }
 
-    const trimmedTeacherInviteCode = signupTeacherKey.trim();
+    const fullName = signupName;
+    const email = signupEmail;
+    const password = signupPassword;
+    const teacherKey = signupTeacherKey;
+    const selectedRole: SignupRole = signupRole === "teacher" ? "teacher" : "student";
 
-    if (signupRole === "teacher") {
-      if (!trimmedTeacherInviteCode) {
-        setSignupError("Please enter the teacher invite code.");
-        return;
-      }
+    if (selectedRole === "teacher" && !teacherKey.trim()) {
+      setSignupError("Please enter the teacher invite code.");
+      return;
     }
 
+    const metadata =
+      selectedRole === "teacher"
+        ? {
+            name: fullName.trim(),
+            role: "teacher" as const,
+            teacher_invite_code: teacherKey.trim(),
+          }
+        : {
+            name: fullName.trim(),
+            role: "student" as const,
+          };
+
+    console.log("SIGNUP ROLE:", selectedRole);
+    console.log("SIGNUP METADATA:", metadata);
+
     setLoading(true);
-    const { error } = await signUp(
-      signupEmail,
-      signupPassword,
-      signupName,
-      signupRole,
-      signupRole === "teacher" ? trimmedTeacherInviteCode : undefined
-    );
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: {
+        data: metadata,
+      },
+    });
+
+    void data;
+
     setLoading(false);
     if (error) {
-      const signupError = error as Error & { code?: string };
-      console.error("Supabase signUp error:", signupError);
-      console.error("Supabase signUp error message:", signupError?.message);
-      console.error("Supabase signUp error code:", signupError?.code);
-      console.error("Supabase signUp full object:", JSON.stringify(signupError, null, 2));
-      setSignupError(signupError?.message || "Unknown signup error");
+      if (error.message.includes("INVALID_TEACHER_INVITE_CODE")) {
+        setSignupError("Invalid teacher invite code.");
+      } else {
+        setSignupError(error.message);
+      }
     } else {
       toast({
         title: "Account Created!",

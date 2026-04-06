@@ -20,7 +20,7 @@ interface AuthContextType {
   session: Session | null;
   profile: Profile | null;
   loading: boolean;
-  signUp: (email: string, password: string, name: string, role: AppRole, teacherInviteCode?: string) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, name: string, role: AppRole) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
 }
@@ -71,42 +71,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     email: string,
     password: string,
     name: string,
-    role: AppRole,
-    teacherInviteCode?: string
+    role: AppRole
   ) => {
-    const fullName = name;
     const selectedRole: "teacher" | "student" = role === "teacher" ? "teacher" : "student";
-    const teacherKey = String(teacherInviteCode ?? "");
-
-    const trimmedName = fullName.trim();
-    const trimmedTeacherKey = teacherKey.trim();
+    const trimmedName = name.trim();
 
     const metadata =
       selectedRole === "teacher"
         ? {
             role: "teacher" as const,
             name: trimmedName,
-            teacher_invite_code: trimmedTeacherKey,
           }
         : {
             role: "student" as const,
             name: trimmedName,
           };
 
-    console.log("SIGNUP ROLE:", selectedRole);
-    console.log("SIGNUP TEACHER KEY RAW:", teacherKey);
-    console.log("SIGNUP TEACHER KEY TRIMMED:", trimmedTeacherKey);
-    console.log("SIGNUP METADATA:", metadata);
-
-    const { data, error } = await supabase.auth.signUp({
+    const { error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
       options: {
         data: metadata,
       },
     });
-
-    void data;
 
     return { error: error as Error | null };
   };
