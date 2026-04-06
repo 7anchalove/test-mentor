@@ -20,7 +20,7 @@ interface AuthContextType {
   session: Session | null;
   profile: Profile | null;
   loading: boolean;
-  signUp: (email: string, password: string, name: string, role: AppRole, teacherKey?: string) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, name: string, role: AppRole, teacherInviteCode?: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
 }
@@ -72,15 +72,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     password: string,
     name: string,
     role: AppRole,
-    teacherKey?: string
+    teacherInviteCode?: string
   ) => {
     const signupRole: "teacher" | "student" = role === "teacher" ? "teacher" : "student";
-    const trimmedTeacherKey = String(teacherKey ?? "").trim();
+    const trimmedTeacherInviteCode = String(teacherInviteCode ?? "").trim();
 
     const signupMetadata = signupRole === "teacher"
       ? {
           role: "teacher" as const,
-          teacher_invite_code: trimmedTeacherKey,
+          teacher_invite_code: trimmedTeacherInviteCode,
           name,
         }
       : {

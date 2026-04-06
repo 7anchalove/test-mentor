@@ -98,10 +98,10 @@ const AuthPage = () => {
       return;
     }
 
-    const trimmedTeacherKey = signupTeacherKey.trim();
+    const trimmedTeacherInviteCode = signupTeacherKey.trim();
 
     if (signupRole === "teacher") {
-      if (!trimmedTeacherKey) {
+      if (!trimmedTeacherInviteCode) {
         setSignupError("Please enter the teacher invite code.");
         return;
       }
@@ -113,7 +113,7 @@ const AuthPage = () => {
       signupPassword,
       signupName,
       signupRole,
-      signupRole === "teacher" ? trimmedTeacherKey : undefined
+      signupRole === "teacher" ? trimmedTeacherInviteCode : undefined
     );
     setLoading(false);
     if (error) {
