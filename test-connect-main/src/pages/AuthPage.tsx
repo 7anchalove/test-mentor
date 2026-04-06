@@ -117,13 +117,12 @@ const AuthPage = () => {
     );
     setLoading(false);
     if (error) {
-      const normalizedMessage = String(error.message ?? "").toLowerCase();
-      const msg =
-        normalizedMessage.includes("invalid_teacher_invite_code") ||
-        normalizedMessage.includes("database error saving new user")
-          ? "Invalid teacher invite code."
-          : error.message;
-      setSignupError(msg);
+      const signupError = error as Error & { code?: string };
+      console.error("Supabase signUp error:", signupError);
+      console.error("Supabase signUp error message:", signupError?.message);
+      console.error("Supabase signUp error code:", signupError?.code);
+      console.error("Supabase signUp full object:", JSON.stringify(signupError, null, 2));
+      setSignupError(signupError?.message || "Unknown signup error");
     } else {
       toast({
         title: "Account Created!",
