@@ -102,10 +102,6 @@ const AuthPage = () => {
         setSignupError("Teacher access key is required.");
         return;
       }
-      if (signupTeacherKey.trim() !== "52552") {
-        setSignupError("The teacher access key is incorrect. Please contact the platform administrator.");
-        return;
-      }
     }
     setLoading(true);
     const { error } = await signUp(
@@ -117,8 +113,11 @@ const AuthPage = () => {
     );
     setLoading(false);
     if (error) {
+      const normalizedMessage = String(error.message ?? "").toLowerCase();
       const msg = error.message.includes("already registered")
         ? "This email is already registered. Try logging in instead."
+        : normalizedMessage.includes("invalid_teacher_invite_code") || normalizedMessage.includes("teacher invite")
+          ? "The teacher access key is invalid. Please contact the platform administrator."
         : error.message;
       setSignupError(msg);
     } else {

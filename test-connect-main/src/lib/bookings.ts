@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
-import { BOOKING_STATUS, assertBookingStatus } from "@/lib/bookingStatus";
+import { BOOKING_STATUS } from "@/lib/bookingStatus";
 
 type TestCategory = Database["public"]["Enums"]["test_category"];
 
@@ -92,54 +92,34 @@ export async function createBookingRequest(params: {
   receipt: UploadedReceipt;
 }) {
   const { studentId, teacherId, category, subtype, datetimeStr, receiptUrl, receipt } = params;
-  const normalizedReceiptUrl = receiptUrl?.trim();
+  const normalizedReceiptPath = receiptUrl?.trim();
 
-  if (!normalizedReceiptUrl) {
+  if (!normalizedReceiptPath) {
     throw new Error("Receipt upload is required before submitting");
   }
 
-  const status = assertBookingStatus(
-    BOOKING_STATUS.PENDING,
-    "createBookingRequest.insert(bookings)",
+  const { data: booking, error: bookingError } = await supabase.rpc(
+    "create_booking_request_with_selection" as any,
+    {
+      p_student_id: studentId,
+      p_teacher_id: teacherId,
+      p_test_category: category,
+      p_test_subtype: subtype,
+      p_start_date_time: datetimeStr,
+      p_receipt_path: normalizedReceiptPath,
+      p_receipt_mime: receipt.receiptMime,
+      p_receipt_original_name: receipt.receiptOriginalName,
+      p_status: BOOKING_STATUS.PENDING,
+    } as any,
   );
-
-  const { data: selection, error: selectionError } = await supabase
-    .from("student_test_selections")
-    .insert({
-      student_id: studentId,
-      test_category: category,
-      test_subtype: subtype,
-      test_date_time: datetimeStr,
-    })
-    .select("id")
-    .single();
-
-  if (selectionError) throw selectionError;
-
-  const payload = {
-    student_id: studentId,
-    teacher_id: teacherId,
-    student_test_selection_id: selection.id,
-    start_date_time: datetimeStr,
-    status,
-    receipt_url: normalizedReceiptUrl,
-    receipt_uploaded_at: new Date().toISOString(),
-    receipt_path: receipt.receiptPath,
-    receipt_mime: receipt.receiptMime,
-    receipt_original_name: receipt.receiptOriginalName,
-  };
-
-  console.log("BOOKING INSERT payload", payload);
-
-  const { data: booking, error: bookingError } = await supabase
-    .from("bookings")
-    .insert(payload as any)
-    .select()
-    .single();
 
   if (bookingError) throw bookingError;
 
-  return booking;
+  if (!booking) {
+    throw new Error("Booking creation returned no row");
+  }
+
+  return booking as Database["public"]["Tables"]["bookings"]["Row"];
 }
 
 export async function cancelBooking(bookingId: string, reason?: string) {

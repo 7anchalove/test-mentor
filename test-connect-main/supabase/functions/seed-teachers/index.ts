@@ -7,12 +7,12 @@ const corsHeaders = {
 };
 
 const TEACHERS = [
-  { email: "prof.rossi@testmentor.com", password: "Teacher123!", name: "Prof. Marco Rossi", bio: "10+ years teaching Italian language exams", headline: "ITA L2 & CLA Expert", subjects: ["ITA L2", "CLA", "Grammar"] },
-  { email: "dr.bianchi@testmentor.com", password: "Teacher123!", name: "Dr. Elena Bianchi", bio: "University admission test specialist", headline: "TOLC Preparation Specialist", subjects: ["TOLC-I", "TOLC-E", "Mathematics"] },
-  { email: "prof.ferrari@testmentor.com", password: "Teacher123!", name: "Prof. Luca Ferrari", bio: "Engineering and science test prep", headline: "STEM Test Coach", subjects: ["TOLC-I", "TOLC-S", "Physics"] },
-  { email: "dr.romano@testmentor.com", password: "Teacher123!", name: "Dr. Sofia Romano", bio: "Language certification expert with CILS/CELI experience", headline: "Language Certification Guru", subjects: ["ITA L2", "CENTS", "CLA"] },
-  { email: "prof.conti@testmentor.com", password: "Teacher123!", name: "Prof. Alessandro Conti", bio: "Former TOLC exam committee member", headline: "TOLC Insider", subjects: ["TOLC-E", "TOLC-F", "TOLC-SU", "Economics"] },
-  { email: "dr.moretti@testmentor.com", password: "Teacher123!", name: "Dr. Giulia Moretti", bio: "Biology and medical science test prep specialist", headline: "Bio & Med Test Expert", subjects: ["TOLC-B", "TOLC-S", "Biology"] },
+  { email: "prof.rossi@testmentor.com", name: "Prof. Marco Rossi", bio: "10+ years teaching Italian language exams", headline: "ITA L2 & CLA Expert", subjects: ["ITA L2", "CLA", "Grammar"] },
+  { email: "dr.bianchi@testmentor.com", name: "Dr. Elena Bianchi", bio: "University admission test specialist", headline: "TOLC Preparation Specialist", subjects: ["TOLC-I", "TOLC-E", "Mathematics"] },
+  { email: "prof.ferrari@testmentor.com", name: "Prof. Luca Ferrari", bio: "Engineering and science test prep", headline: "STEM Test Coach", subjects: ["TOLC-I", "TOLC-S", "Physics"] },
+  { email: "dr.romano@testmentor.com", name: "Dr. Sofia Romano", bio: "Language certification expert with CILS/CELI experience", headline: "Language Certification Guru", subjects: ["ITA L2", "CENTS", "CLA"] },
+  { email: "prof.conti@testmentor.com", name: "Prof. Alessandro Conti", bio: "Former TOLC exam committee member", headline: "TOLC Insider", subjects: ["TOLC-E", "TOLC-F", "TOLC-SU", "Economics"] },
+  { email: "dr.moretti@testmentor.com", name: "Dr. Giulia Moretti", bio: "Biology and medical science test prep specialist", headline: "Bio & Med Test Expert", subjects: ["TOLC-B", "TOLC-S", "Biology"] },
 ];
 
 const AVAILABILITY = [
@@ -37,6 +37,17 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const teacherDefaultPassword = Deno.env.get('TEACHER_DEFAULT_PASSWORD');
+
+    if (!teacherDefaultPassword || teacherDefaultPassword.length < 8) {
+      return new Response(JSON.stringify({
+        error: 'Missing TEACHER_DEFAULT_PASSWORD secret (minimum 8 chars).',
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const supabase = createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false }
     });
@@ -59,7 +70,7 @@ serve(async (req) => {
       // Create auth user
       const { data: authData, error: authError } = await supabase.auth.admin.createUser({
         email: teacher.email,
-        password: teacher.password,
+        password: teacherDefaultPassword,
         email_confirm: true,
         user_metadata: { name: teacher.name, role: 'teacher' },
       });

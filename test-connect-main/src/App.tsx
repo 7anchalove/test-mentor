@@ -28,7 +28,16 @@ import AdminTeachers from "./pages/admin/AdminTeachers";
 import NotFound from "./pages/NotFound";
 import AvailabilityTestPage from "./pages/dev/AvailabilityTestPage";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      gcTime: 5 * 60_000,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
 const isDev = import.meta.env.DEV;
 
 const App = () => (

@@ -36,6 +36,11 @@ function isMissingColumnError(error: any, column: string) {
   return message.includes(column.toLowerCase()) && message.includes("does not exist");
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
 async function fetchCount(table: string, filters?: Array<{ column: string; value: string }>) {
   let query = supabase.from(table as any).select("id", { count: "exact", head: true });
 
@@ -100,11 +105,22 @@ const AdminDashboard = () => {
       setError(null);
 
       try {
-        const { data, error: fetchError } = await supabase
+        let data: any[] | null = null;
+        let fetchError: any = null;
+
+        ({ data, error: fetchError } = await supabase
           .from("admin_audit_log")
           .select("id,created_at,admin_user_id,action,entity_type,entity_id,before,after")
           .order("created_at", { ascending: false })
-          .limit(20);
+          .limit(20));
+
+        if (fetchError && (isMissingColumnError(fetchError, "entity_type") || isMissingColumnError(fetchError, "before") || isMissingColumnError(fetchError, "after"))) {
+          ({ data, error: fetchError } = await supabase
+            .from("admin_audit_log")
+            .select("id,created_at,admin_user_id,action,entity,entity_id,details")
+            .order("created_at", { ascending: false })
+            .limit(20));
+        }
 
         if (fetchError) throw fetchError;
 
@@ -116,10 +132,19 @@ const AdminDashboard = () => {
             created_at: String(row.created_at ?? ""),
             admin_user_id: String(row.admin_user_id ?? ""),
             action: String(row.action ?? ""),
-            entity_type: row.entity_type ? String(row.entity_type) : null,
+            entity_type: row.entity_type ? String(row.entity_type) : row.entity ? String(row.entity) : null,
             entity_id: row.entity_id ?? null,
-            before: (row.before as Record<string, unknown> | null) ?? null,
-            after: (row.after as Record<string, unknown> | null) ?? null,
+            before:
+              (asRecord(row.before) ??
+                asRecord(asRecord(row.details)?.before) ??
+                asRecord(asRecord(row.details)?.old) ??
+                null),
+            after:
+              (asRecord(row.after) ??
+                asRecord(asRecord(row.details)?.after) ??
+                asRecord(asRecord(row.details)?.new) ??
+                asRecord(row.details) ??
+                null),
           })),
         );
       } catch (caughtError: unknown) {
