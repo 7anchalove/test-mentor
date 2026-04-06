@@ -97,28 +97,32 @@ const AuthPage = () => {
       setSignupError(result.error.errors[0].message);
       return;
     }
+
+    const trimmedTeacherKey = signupTeacherKey.trim();
+
     if (signupRole === "teacher") {
-      if (!signupTeacherKey.trim()) {
-        setSignupError("Teacher access key is required.");
+      if (!trimmedTeacherKey) {
+        setSignupError("Please enter the teacher invite code.");
         return;
       }
     }
+
     setLoading(true);
     const { error } = await signUp(
       signupEmail,
       signupPassword,
       signupName,
       signupRole,
-      signupRole === "teacher" ? signupTeacherKey.trim() : undefined
+      signupRole === "teacher" ? trimmedTeacherKey : undefined
     );
     setLoading(false);
     if (error) {
       const normalizedMessage = String(error.message ?? "").toLowerCase();
-      const msg = error.message.includes("already registered")
-        ? "This email is already registered. Try logging in instead."
-        : normalizedMessage.includes("invalid_teacher_invite_code") || normalizedMessage.includes("teacher invite")
-          ? "The teacher access key is invalid. Please contact the platform administrator."
-        : error.message;
+      const msg =
+        normalizedMessage.includes("invalid_teacher_invite_code") ||
+        normalizedMessage.includes("database error saving new user")
+          ? "Invalid teacher invite code."
+          : error.message;
       setSignupError(msg);
     } else {
       toast({

@@ -74,15 +74,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     role: AppRole,
     teacherKey?: string
   ) => {
+    const signupRole: "teacher" | "student" = role === "teacher" ? "teacher" : "student";
+    const trimmedTeacherKey = String(teacherKey ?? "").trim();
+
+    const signupMetadata = signupRole === "teacher"
+      ? {
+          role: "teacher" as const,
+          teacher_invite_code: trimmedTeacherKey,
+          name,
+        }
+      : {
+          role: "student" as const,
+          name,
+        };
+
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: {
-          full_name: name,
-          role,
-          teacher_invite_code: role === "teacher" ? teacherKey?.trim() : null,
-        },
+        data: signupMetadata,
       },
     });
 
