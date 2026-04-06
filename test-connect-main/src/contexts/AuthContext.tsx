@@ -74,27 +74,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     role: AppRole,
     teacherInviteCode?: string
   ) => {
-    const signupRole: "teacher" | "student" = role === "teacher" ? "teacher" : "student";
-    const trimmedTeacherInviteCode = String(teacherInviteCode ?? "").trim();
+    const fullName = name;
+    const selectedRole: "teacher" | "student" = role === "teacher" ? "teacher" : "student";
+    const teacherKey = String(teacherInviteCode ?? "");
 
-    const signupMetadata = signupRole === "teacher"
-      ? {
-          role: "teacher" as const,
-          teacher_invite_code: trimmedTeacherInviteCode,
-          name,
-        }
-      : {
-          role: "student" as const,
-          name,
-        };
+    const trimmedName = fullName.trim();
+    const trimmedTeacherKey = teacherKey.trim();
 
-    const { error } = await supabase.auth.signUp({
-      email,
+    const metadata =
+      selectedRole === "teacher"
+        ? {
+            role: "teacher" as const,
+            name: trimmedName,
+            teacher_invite_code: trimmedTeacherKey,
+          }
+        : {
+            role: "student" as const,
+            name: trimmedName,
+          };
+
+    console.log("SIGNUP ROLE:", selectedRole);
+    console.log("SIGNUP TEACHER KEY RAW:", teacherKey);
+    console.log("SIGNUP TEACHER KEY TRIMMED:", trimmedTeacherKey);
+    console.log("SIGNUP METADATA:", metadata);
+
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim(),
       password,
       options: {
-        data: signupMetadata,
+        data: metadata,
       },
     });
+
+    void data;
 
     return { error: error as Error | null };
   };
