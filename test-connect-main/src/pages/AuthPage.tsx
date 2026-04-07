@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Navigate, Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,7 +27,7 @@ const signupSchema = loginSchema.extend({
 type SignupRole = "teacher" | "student";
 
 const AuthPage = () => {
-  const { signIn, user, profile } = useAuth();
+  const { signIn, signUp, user, profile } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<"login" | "signup">("login");
@@ -112,35 +111,15 @@ const AuthPage = () => {
       return;
     }
 
-    const metadata =
-      selectedRole === "teacher"
-        ? {
-            name: fullName.trim(),
-            role: "teacher" as const,
-            teacher_invite_code: teacherKey.trim(),
-          }
-        : {
-            name: fullName.trim(),
-            role: "student" as const,
-          };
-
-    console.log("SIGNUP ROLE:", selectedRole);
-    console.log("SIGNUP METADATA:", metadata);
-
     setLoading(true);
-    const { data, error } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
-      options: {
-        data: metadata,
-      },
-    });
-
-    void data;
+    const { error } = await signUp(email, password, fullName, selectedRole, teacherKey);
 
     setLoading(false);
     if (error) {
-      if (error.message.includes("INVALID_TEACHER_INVITE_CODE")) {
+      if (
+        error.message.includes("INVALID_TEACHER_INVITE_CODE") ||
+        error.message.includes("database error saving new user")
+      ) {
         setSignupError("Invalid teacher invite code.");
       } else {
         setSignupError(error.message);

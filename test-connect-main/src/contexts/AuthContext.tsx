@@ -20,7 +20,13 @@ interface AuthContextType {
   session: Session | null;
   profile: Profile | null;
   loading: boolean;
-  signUp: (email: string, password: string, name: string, role: AppRole) => Promise<{ error: Error | null }>;
+  signUp: (
+    email: string,
+    password: string,
+    name: string,
+    role: "student" | "teacher",
+    teacherInviteCode?: string
+  ) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
 }
@@ -71,16 +77,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     email: string,
     password: string,
     name: string,
-    role: AppRole
+    role: "student" | "teacher",
+    teacherInviteCode?: string
   ) => {
-    const selectedRole: "teacher" | "student" = role === "teacher" ? "teacher" : "student";
+    const trimmedEmail = email.trim();
+    const trimmedPassword = password.trim();
     const trimmedName = name.trim();
+    const trimmedTeacherInviteCode = teacherInviteCode?.trim();
 
     const metadata =
-      selectedRole === "teacher"
+      role === "teacher"
         ? {
             role: "teacher" as const,
             name: trimmedName,
+            teacher_invite_code: trimmedTeacherInviteCode,
           }
         : {
             role: "student" as const,
@@ -88,8 +98,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           };
 
     const { error } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
+      email: trimmedEmail,
+      password: trimmedPassword,
       options: {
         data: metadata,
       },
